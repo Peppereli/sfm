@@ -2,7 +2,7 @@
 #include <array>
 
 // Define constants for strict size management
-const int SALT_SIZE = 32;       // Standard for Argon2
+const int SALT_SIZE = 32;       // Standard for Scrypt
 const int NONCE_SIZE = 12;      // Standard for AES-GCM / ChaCha20-Poly1305
 const int AUTH_TAG_SIZE = 16;   // Integrity check tag size
 
