@@ -22,7 +22,7 @@ g++ src/main.cpp src/core/container_manager.cpp -o sfm_tool -lcryptopp
 This allows you to run the legacy AES test script.
 
 ```bash
-g++ src/tools/prototype_aes.cpp -o aes_test -lcryptopp
+g++ src/tools/prototype_aess.cpp -o aes_test -lcryptopp
 
 ```
 
