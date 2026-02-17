@@ -1,3 +1,4 @@
+/**/
 #include "container_manager.h"
 #include <iostream>
 #include <fstream>
@@ -160,6 +161,121 @@ bool ContainerManager::openContainer(const std::string& filePath, const std::str
 
     } catch (const Exception& e) {
         std::cerr << "[Crypto Error] " << e.what() << std::endl;
+        return false;
+    }
+}
+
+
+//--------------------------------------------------------------------------------------------------------------------------17.02.2026
+
+// === ИНТЕГРАЦИЯ PROTOTYPE_AESS ===
+
+bool ContainerManager::encryptFile(const std::string& inputPath, const std::string& outputPath, const std::string& password) {
+    std::cout << "[Core] Encrypting file: " << inputPath << " -> " << outputPath << std::endl;
+
+    try {
+        // 1. Подготовка файлов
+        std::ifstream inFile(inputPath, std::ios::binary);
+        if (!inFile.is_open()) {
+            std::cerr << "[Error] Input file not found." << std::endl;
+            return false;
+        }
+        std::ofstream outFile(outputPath, std::ios::binary);
+        if (!outFile.is_open()) return false;
+
+        // 2. Создание и настройка заголовка (как в createContainer)
+        SFMHeader header = createDefaultHeader();
+        
+        AutoSeededRandomPool prng;
+        prng.GenerateBlock(header.kdfSalt, SALT_SIZE);
+        prng.GenerateBlock(header.encryptionNonce, NONCE_SIZE);
+
+        // 3. Генерация ключа (Scrypt вместо PBKDF2 для совместимости)
+        SecByteBlock masterKey(32);
+        Scrypt kdf;
+        kdf.DeriveKey(
+            masterKey, masterKey.size(),
+            (const byte*)password.data(), password.size(),
+            header.kdfSalt, SALT_SIZE,
+            header.kdfMemoryCost,
+            header.kdfIterations
+        );
+
+        // 4. Запись заголовка в начало файла
+        outFile.write(reinterpret_cast<const char*>(&header), sizeof(SFMHeader));
+
+        // 5. Шифрование (AES-GCM)
+        GCM<AES>::Encryption encryptor;
+        encryptor.SetKeyWithIV(masterKey, masterKey.size(), header.encryptionNonce, NONCE_SIZE);
+
+        // Используем конвейер Crypto++: FileSource -> Encryptor -> FileSink
+        // Это заменяет ручной цикл чтения/записи из createContainer, так как размер файла известен
+        FileSource fs(inFile, true,
+            new AuthenticatedEncryptionFilter(encryptor,
+                new FileSink(outFile)
+            )
+        );
+
+        std::cout << "[Success] File encrypted successfully." << std::endl;
+        return true;
+
+    } catch (const Exception& e) {
+        std::cerr << "[Crypto Error] " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool ContainerManager::decryptFile(const std::string& inputPath, const std::string& outputPath, const std::string& password) {
+    std::cout << "[Core] Decrypting file: " << inputPath << " -> " << outputPath << std::endl;
+
+    try {
+        std::ifstream inFile(inputPath, std::ios::binary);
+        if (!inFile.is_open()) {
+            std::cerr << "[Error] Input file not found." << std::endl;
+            return false;
+        }
+
+        // 1. Читаем заголовок
+        SFMHeader header;
+        inFile.read(reinterpret_cast<char*>(&header), sizeof(SFMHeader));
+
+        // 2. Проверка Magic Bytes
+        if (header.magic[0] != 'S' || header.magic[1] != 'F' || header.magic[2] != 'M') {
+            std::cerr << "[Error] Invalid SFM file format." << std::endl;
+            return false;
+        }
+
+        // 3. Восстанавливаем ключ (Scrypt)
+        SecByteBlock masterKey(32);
+        Scrypt kdf;
+        kdf.DeriveKey(
+            masterKey, masterKey.size(),
+            (const byte*)password.data(), password.size(),
+            header.kdfSalt, SALT_SIZE,
+            header.kdfMemoryCost,
+            header.kdfIterations
+        );
+
+        // 4. Настройка дешифратора
+        GCM<AES>::Decryption decryptor;
+        decryptor.SetKeyWithIV(masterKey, masterKey.size(), header.encryptionNonce, NONCE_SIZE);
+
+        // 5. Расшифровка в выходной файл
+        // Важно: inFile уже смещен на размер заголовка после чтения header, 
+        // поэтому FileSource начнет читать зашифрованные данные сразу после заголовка.
+        std::ofstream outFile(outputPath, std::ios::binary);
+        
+        FileSource fs(inFile, true,
+            new AuthenticatedDecryptionFilter(decryptor,
+                new FileSink(outFile)
+            )
+        );
+
+        std::cout << "[Success] File decrypted successfully." << std::endl;
+        return true;
+
+    } catch (const Exception& e) {
+        std::cerr << "[Crypto Error] Decryption failed (Wrong password or corrupted file)." << std::endl;
         return false;
     }
 }
