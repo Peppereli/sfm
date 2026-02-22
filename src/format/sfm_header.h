@@ -1,12 +1,10 @@
 #include <cstdint>
 #include <array>
 
-// Define constants for strict size management
-const int SALT_SIZE = 32;       // Standard for Scrypt
-const int NONCE_SIZE = 12;      // Standard for AES-GCM / ChaCha20-Poly1305
-const int AUTH_TAG_SIZE = 16;   // Integrity check tag size
+const int SALT_SIZE = 32;
+const int NONCE_SIZE = 12;
+const int AUTH_TAG_SIZE = 16;
 
-// Enum to switch between algorithms 
 enum class EncryptionAlgo : uint8_t {
     AES_256_GCM = 1,
     CHACHA20_POLY1305 = 2
@@ -14,7 +12,6 @@ enum class EncryptionAlgo : uint8_t {
 
 #pragma pack(push, 1)
 
-// The Master Header Structure
 struct SFMHeader {
     // 1. Magic Bytes (4 bytes)
     // Identifies this file as yours. e.g., 'S', 'F', 'M', '\0'
