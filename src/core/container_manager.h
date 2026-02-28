@@ -17,6 +17,7 @@ public:
 
     bool decryptFile(const std::string& inputPath, const std::string& outputPath, const std::string& password);
 
+    bool secureDeleteFile(const std::string& filePath);
 private:
     void generateRandomSalt(uint8_t* buffer, int length);
     SFMHeader createDefaultHeader();
