@@ -289,3 +289,52 @@ bool ContainerManager::secureDeleteFile(const std::string& filePath) {
         return false;
     }
 }
+
+// Password hash and storage
+std::string ContainerManager::hashMasterPassword(const std::string& password) {
+    SHA256 hash;
+    std::string digest;
+
+    StringSource ss(password, true,
+        new HashFilter(hash,
+            new HexEncoder(
+                new StringSink(digest)
+            )
+        )
+    );
+
+    return digest;
+}
+
+bool ContainerManager::authenticateOrRegister(const std::string& hashFile) {
+    std::ifstream inFile(hashFile);
+    std::string storedHash;
+    
+    if (inFile >> storedHash) {
+        std::string attempt;
+        std::cout << "[Auth] Enter login: ";
+        std::getline(std::cin, attempt);
+
+        if (hashMasterPassword(attempt) == storedHash) {
+            std::cout << "[Auth] Success.\n";
+            return true;
+        } else {
+            std::cerr << "[Auth] Failure.\n";
+            return false;
+        }
+    } else {
+        std::cout << "[Auth] Setup password: ";
+        std::string newPass;
+        std::getline(std::cin, newPass);
+
+        std::ofstream outFile(hashFile);
+        if (!outFile) {
+            std::cerr << "[Error] Could not create auth file.\n";
+            return false;
+        }
+
+        outFile << hashMasterPassword(newPass);
+        std::cout << "[Auth] Master password initialized.\n";
+        return true;
+    }
+}
