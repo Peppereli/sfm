@@ -10,6 +10,8 @@
 #include <cryptopp/gcm.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/files.h>
+#include <cryptopp/hex.h>
+#include <cryptopp/sha.h>
 
 #include <cstdio>
 
@@ -305,36 +307,25 @@ std::string ContainerManager::hashMasterPassword(const std::string& password) {
 
     return digest;
 }
-
-bool ContainerManager::authenticateOrRegister(const std::string& hashFile) {
+bool ContainerManager::authenticateOrRegister(const std::string& hashFile, const std::string& password) {
     std::ifstream inFile(hashFile);
     std::string storedHash;
     
-    if (inFile >> storedHash) {
-        std::string attempt;
-        std::cout << "[Auth] Enter login: ";
-        std::getline(std::cin, attempt);
+    std::string currentHash = hashMasterPassword(password);
 
-        if (hashMasterPassword(attempt) == storedHash) {
-            std::cout << "[Auth] Success.\n";
-            return true;
+    if (inFile >> storedHash) {
+        if (currentHash == storedHash) {
+            return true; 
         } else {
-            std::cerr << "[Auth] Failure.\n";
+            std::cerr << "[Critical] Access Denied: Incorrect Password." << std::endl;
             return false;
         }
     } else {
-        std::cout << "[Auth] Setup password: ";
-        std::string newPass;
-        std::getline(std::cin, newPass);
-
         std::ofstream outFile(hashFile);
-        if (!outFile) {
-            std::cerr << "[Error] Could not create auth file.\n";
-            return false;
-        }
+        if (!outFile) return false;
 
-        outFile << hashMasterPassword(newPass);
-        std::cout << "[Auth] Master password initialized.\n";
+        outFile << currentHash;
+        std::cout << "[Info] No password file found. New password registered." << std::endl;
         return true;
     }
 }

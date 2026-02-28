@@ -19,7 +19,7 @@ public:
 
     bool secureDeleteFile(const std::string& filePath);
 
-    bool authenticateOrRegister(const std::string& hashFile);
+    bool authenticateOrRegister(const std::string& hashFile, const std::string& password);
 private:
     void generateRandomSalt(uint8_t* buffer, int length);
     std::string hashMasterPassword(const std::string& password);
