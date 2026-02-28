@@ -18,8 +18,11 @@ public:
     bool decryptFile(const std::string& inputPath, const std::string& outputPath, const std::string& password);
 
     bool secureDeleteFile(const std::string& filePath);
+
+    bool authenticateOrRegister(const std::string& hashFile);
 private:
     void generateRandomSalt(uint8_t* buffer, int length);
+    std::string hashMasterPassword(const std::string& password);
     SFMHeader createDefaultHeader();
 };
 
