@@ -1,4 +1,3 @@
-/**/
 #include "container_manager.h"
 #include <iostream>
 #include <fstream>
@@ -11,6 +10,8 @@
 #include <cryptopp/gcm.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/files.h>
+
+#include <cstdio>
 
 using namespace CryptoPP;
 
@@ -224,6 +225,67 @@ bool ContainerManager::decryptFile(const std::string& inputPath, const std::stri
 
     } catch (const Exception& e) {
         std::cerr << "[Crypto Error] Decryption failed (Wrong password or corrupted file)." << std::endl;
+        return false;
+    }
+}
+
+bool ContainerManager::secureDeleteFile(const std::string& filePath) {
+    std::cout << "[Core] Securely wiping file: " << filePath << std::endl;
+
+    std::fstream file(filePath, std::ios::binary | std::ios::in | std::ios::out);
+    if (!file.is_open()) {
+        std::cerr << "[Error] File not found or currently in use." << std::endl;
+        return false;
+    }
+
+    file.seekg(0, std::ios::end);
+    long fileSize = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    if (fileSize == 0) {
+        file.close();
+        std::remove(filePath.c_str());
+        std::cout << "[Success] Empty file deleted." << std::endl;
+        return true;
+    }
+
+    const int BUFFER_SIZE = 4096;
+    std::vector<char> buffer(BUFFER_SIZE);
+
+    std::cout << "[Wipe] Pass 1/3: Overwriting with zeros..." << std::endl;
+    std::fill(buffer.begin(), buffer.end(), 0x00);
+    for (long i = 0; i < fileSize; i += BUFFER_SIZE) {
+        long chunk = (fileSize - i < BUFFER_SIZE) ? (fileSize - i) : BUFFER_SIZE;
+        file.write(buffer.data(), chunk);
+    }
+    file.flush();
+    file.seekg(0, std::ios::beg);
+
+    std::cout << "[Wipe] Pass 2/3: Overwriting with ones..." << std::endl;
+    std::fill(buffer.begin(), buffer.end(), 0xFF);
+    for (long i = 0; i < fileSize; i += BUFFER_SIZE) {
+        long chunk = (fileSize - i < BUFFER_SIZE) ? (fileSize - i) : BUFFER_SIZE;
+        file.write(buffer.data(), chunk);
+    }
+    file.flush();
+    file.seekg(0, std::ios::beg);
+
+    std::cout << "[Wipe] Pass 3/3: Overwriting with random data..." << std::endl;
+    AutoSeededRandomPool prng;
+    for (long i = 0; i < fileSize; i += BUFFER_SIZE) {
+        long chunk = (fileSize - i < BUFFER_SIZE) ? (fileSize - i) : BUFFER_SIZE;
+        prng.GenerateBlock(reinterpret_cast<byte*>(buffer.data()), chunk);
+        file.write(buffer.data(), chunk);
+    }
+    file.flush();
+    
+    file.close();
+
+    if (std::remove(filePath.c_str()) == 0) {
+        std::cout << "[Success] File securely wiped and deleted." << std::endl;
+        return true;
+    } else {
+        std::cerr << "[Error] Failed to delete file record (data is wiped though)." << std::endl;
         return false;
     }
 }
