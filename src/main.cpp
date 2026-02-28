@@ -21,7 +21,12 @@ int main(int argc, char* argv[]) {
     std::cin >> password;
 
     ContainerManager manager;
-
+    
+    const std::string AUTH_FILE = "pass";
+    if (!manager.authenticateOrRegister(AUTH_FILE)) {
+        return 1;
+    }
+    
     if (command == "create") {
         std::string filePath = argv[2];
         long sizeMb = (argc >= 4) ? std::stol(argv[3]) : 10;
