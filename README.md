@@ -8,12 +8,12 @@
 
 ---
 
-## 📦 Compilation Instructions
+## Compilation Instructions
 
 ### 1. Build the Main Tool
 This is the primary CLI application for managing vaults.
 ```bash
-g++ src/main.cpp src/core/container_manager.cpp -o sfm_tool -lcryptopp
+g++ src/main.cpp src/core/functions.cpp -o main -lcryptopp
 
 ```
 
@@ -22,13 +22,13 @@ g++ src/main.cpp src/core/container_manager.cpp -o sfm_tool -lcryptopp
 This allows you to run the legacy AES test script.
 
 ```bash
-g++ src/tools/prototype_aess.cpp -o aes_test -lcryptopp
+g++ src/tools/aes.cpp -o aes -lcryptopp
 
 ```
 
 ---
 
-## ⚠️ Runtime Setup (Windows Only)
+## Runtime Setup (Windows Only)
 
 If you run the `.exe` and it closes immediately (silent crash), you are missing the runtime DLLs.
 Run these commands in your project folder to copy them:
@@ -43,7 +43,7 @@ cp /c/msys64/ucrt64/bin/libwinpthread-1.dll .
 
 ---
 
-## 💻 Usage
+## Usage
 
 ### Create a Vault
 
@@ -73,7 +73,7 @@ Checks if the password is correct by attempting to decrypt the first block.
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 * `src/core/`: The "Engine" logic (Cryptography, File I/O).
 * `src/format/`: The "Blueprints" (Header structures, Constants).

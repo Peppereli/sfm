@@ -1,5 +1,5 @@
 #include <iostream>
-#include "../src/format/sfm_header.h"
+#include "../src/format/header.h"
 
 int main() {
     SFMHeader header;
