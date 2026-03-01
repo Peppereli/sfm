@@ -75,7 +75,7 @@ Checks if the password is correct by attempting to decrypt the first block.
 
 ## Project Structure
 
-* `src/core/`: The "Engine" logic (Cryptography, File I/O).
-* `src/format/`: The "Blueprints" (Header structures, Constants).
-* `src/tools/`: Prototypes and experimental scripts.
+* `src/core/`: The functions.
+* `src/format/`: The headers.
+* `src/tools/`: Experimentals.
 * `tests/`: Unit tests for architecture verification.
