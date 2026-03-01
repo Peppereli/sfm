@@ -46,18 +46,33 @@ bool ContainerManager::createContainer(const std::string& filePath, const std::s
         std::ofstream file(filePath, std::ios::binary);
         if (!file.is_open()) return false;
 
+        // 1. Write the Header in PLAINTEXT
         file.write(reinterpret_cast<const char*>(&header), sizeof(SFMHeader));
+        
         AuthenticatedEncryptionFilter filter(encryptor, new FileSink(file));
+
+        // 2. Create an Empty Table of Contents and ENCRYPT IT
+        VaultIndex index;
+        std::memset(&index, 0, sizeof(VaultIndex)); // Fill it with zeros (0 files)
+        
+        // Push the index through the AES-GCM filter
+        filter.Put(reinterpret_cast<const byte*>(&index), sizeof(VaultIndex));
+
+        // 3. Fill the REST of the vault with encrypted zeros
         const int CHUNK_SIZE = 4096;
         std::vector<byte> emptyBlock(CHUNK_SIZE, 0);
 
+        // We subtract the index size so the total file size stays exactly what the user asked for
+        long remainingBytes = sizeInBytes - sizeof(VaultIndex);
         long bytesWritten = 0;
-        while (bytesWritten < sizeInBytes) {
-            long remaining = sizeInBytes - bytesWritten;
-            long currentChunk = (remaining < CHUNK_SIZE) ? remaining : CHUNK_SIZE;
+        
+        while (bytesWritten < remainingBytes) {
+            long remainingChunk = remainingBytes - bytesWritten;
+            long currentChunk = (remainingChunk < CHUNK_SIZE) ? remainingChunk : CHUNK_SIZE;
             filter.Put(emptyBlock.data(), currentChunk);
             bytesWritten += currentChunk;
         }
+        
         filter.MessageEnd();
         file.close();
 
@@ -111,40 +126,41 @@ bool ContainerManager::openContainer(const std::string& filePath, const std::str
         header.kdfIterations
     );
     try {
-        byte encryptedBlock[16];
-        file.read(reinterpret_cast<char*>(encryptedBlock), 16);
+        const int indexSize = sizeof(VaultIndex);
+        std::vector<byte> encryptedIndex(indexSize);
+        file.read(reinterpret_cast<char*>(encryptedIndex.data()), indexSize);
 
-        if (file.gcount() < 16) {
+        if (file.gcount() < indexSize) {
             std::cerr << "[Error] File is too short/corrupted." << std::endl;
             return false;
         }
 
+        // Setup Decryptor
         GCM<AES>::Decryption decryptor;
         decryptor.SetKeyWithIV(masterKey, masterKey.size(), header.encryptionNonce, NONCE_SIZE);
-        byte decryptedBlock[16];
-        decryptor.ProcessData(decryptedBlock, encryptedBlock, 16);
-        bool isZeros = true;
-        for (int i = 0; i < 16; i++) {
-            if (decryptedBlock[i] != 0) {
-                isZeros = false;
-                break;
-            }
-        }
 
-        if (isZeros) {
-            std::cout << "[Success] Password Correct! Container is valid." << std::endl;
-            return true;
-        } else {
-            std::cerr << "[Access Denied] Incorrect Password." << std::endl;
+        // 4. Decrypt the Index directly into our struct
+        VaultIndex index;
+        decryptor.ProcessData(reinterpret_cast<byte*>(&index), encryptedIndex.data(), indexSize);
+
+        // 5. The "Sanity Check" (Verifying the Password)
+        // If the password is wrong, index.fileCount will be a massive random number.
+        if (index.fileCount > MAX_FILES_PER_VAULT) {
+            std::cerr << "[Access Denied] Incorrect Password or Corrupted Vault." << std::endl;
             return false;
         }
+
+        // If we pass the check, the password is correct!
+        std::cout << "[Success] Password Correct! Vault Unlocked." << std::endl;
+        std::cout << "[Vault Info] Found " << index.fileCount << " files inside." << std::endl;
+
+        return true;
 
     } catch (const Exception& e) {
         std::cerr << "[Crypto Error] " << e.what() << std::endl;
         return false;
     }
 }
-
 bool ContainerManager::encryptFile(const std::string& inputPath, const std::string& outputPath, const std::string& password) {
     std::cout << "[Core] Encrypting file: " << inputPath << " -> " << outputPath << std::endl;
 
