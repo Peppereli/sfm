@@ -25,6 +25,14 @@ g++ src/ncurses.cpp src/core/functions.cpp -o main -lcryptopp -lncurses
 
 ```
 
+###  Build the ncurses tool with libraries inside 
+This is the primary CLI application for managing vaults.
+On linux you might need to compile it "-lncursesw" without "w" in the end.
+```bash
+g++ src/ncurses.cpp src/core/functions.cpp -o main_tui.exe -static -static-libgcc -static-libstdc++ -DNCURSES_STATIC -I/ucrt64/include/ncurses -lcryptopp -lncursesw -lgdi32
+
+```
+
 ### 2. Build the Prototype (Optional)
 
 This allows you to run the legacy AES test script.
