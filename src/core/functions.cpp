@@ -28,7 +28,6 @@ bool ContainerManager::createContainer(const std::string& filePath, const std::s
     prng.GenerateBlock(header.kdfSalt, SALT_SIZE);
     prng.GenerateBlock(header.encryptionNonce, NONCE_SIZE);
 
-    // Derive Key using Scrypt
     SecByteBlock masterKey(32);
     Scrypt kdf;
     kdf.DeriveKey(
@@ -46,23 +45,18 @@ bool ContainerManager::createContainer(const std::string& filePath, const std::s
         std::ofstream file(filePath, std::ios::binary);
         if (!file.is_open()) return false;
 
-        // 1. Write the Header in PLAINTEXT
         file.write(reinterpret_cast<const char*>(&header), sizeof(SFMHeader));
         
         AuthenticatedEncryptionFilter filter(encryptor, new FileSink(file));
 
-        // 2. Create an Empty Table of Contents and ENCRYPT IT
         VaultIndex index;
-        std::memset(&index, 0, sizeof(VaultIndex)); // Fill it with zeros (0 files)
-        
-        // Push the index through the AES-GCM filter
+        std::memset(&index, 0, sizeof(VaultIndex));
+
         filter.Put(reinterpret_cast<const byte*>(&index), sizeof(VaultIndex));
 
-        // 3. Fill the REST of the vault with encrypted zeros
         const int CHUNK_SIZE = 4096;
         std::vector<byte> emptyBlock(CHUNK_SIZE, 0);
 
-        // We subtract the index size so the total file size stays exactly what the user asked for
         long remainingBytes = sizeInBytes - sizeof(VaultIndex);
         long bytesWritten = 0;
         
@@ -135,22 +129,17 @@ bool ContainerManager::openContainer(const std::string& filePath, const std::str
             return false;
         }
 
-        // Setup Decryptor
         GCM<AES>::Decryption decryptor;
         decryptor.SetKeyWithIV(masterKey, masterKey.size(), header.encryptionNonce, NONCE_SIZE);
 
-        // 4. Decrypt the Index directly into our struct
         VaultIndex index;
         decryptor.ProcessData(reinterpret_cast<byte*>(&index), encryptedIndex.data(), indexSize);
 
-        // 5. The "Sanity Check" (Verifying the Password)
-        // If the password is wrong, index.fileCount will be a massive random number.
         if (index.fileCount > MAX_FILES_PER_VAULT) {
             std::cerr << "[Access Denied] Incorrect Password or Corrupted Vault." << std::endl;
             return false;
         }
 
-        // If we pass the check, the password is correct!
         std::cout << "[Success] Password Correct! Vault Unlocked." << std::endl;
         std::cout << "[Vault Info] Found " << index.fileCount << " files inside." << std::endl;
 
