@@ -27,11 +27,9 @@ void processFile(bool encrypt, std::string inputPath, std::string outputPath, st
 
     try {
         if (encrypt) {
-            // ----- Generate salt -----
             byte salt[SALT_SIZE];
             prng.GenerateBlock(salt, SALT_SIZE);
 
-            // ----- Derive key -----
             SecByteBlock key(KEY_SIZE);
             PKCS5_PBKDF2_HMAC<SHA256> pbkdf2;
             pbkdf2.DeriveKey(
@@ -42,11 +40,9 @@ void processFile(bool encrypt, std::string inputPath, std::string outputPath, st
                 100000
             );
 
-            // ----- Generate IV -----
             byte iv[IV_SIZE];
             prng.GenerateBlock(iv, IV_SIZE);
 
-            // ----- Setup encryption -----
             GCM<AES>::Encryption e;
             e.SetKeyWithIV(key, key.size(), iv, IV_SIZE);
 
@@ -59,7 +55,6 @@ void processFile(bool encrypt, std::string inputPath, std::string outputPath, st
                 )
             );
 
-            // ----- Write output file -----
             std::ofstream out(outputPath, std::ios::binary);
             out.write((char*)salt, SALT_SIZE);
             out.write((char*)iv, IV_SIZE);
@@ -67,16 +62,13 @@ void processFile(bool encrypt, std::string inputPath, std::string outputPath, st
             out.close();
 
         } else {
-            // ----- Open input file -----
             std::ifstream in(inputPath, std::ios::binary);
             if (!in)
                 throw std::runtime_error("Cannot open input file");
 
-            // ----- Read salt -----
             byte salt[SALT_SIZE];
             in.read((char*)salt, SALT_SIZE);
 
-            // ----- Derive key -----
             SecByteBlock key(KEY_SIZE);
             PKCS5_PBKDF2_HMAC<SHA256> pbkdf2;
             pbkdf2.DeriveKey(
@@ -87,11 +79,9 @@ void processFile(bool encrypt, std::string inputPath, std::string outputPath, st
                 100000
             );
 
-            // ----- Read IV -----
             byte iv[IV_SIZE];
             in.read((char*)iv, IV_SIZE);
 
-            // ----- Read remaining ciphertext -----
             std::string ciphertext(
                 (std::istreambuf_iterator<char>(in)),
                 std::istreambuf_iterator<char>()
@@ -99,7 +89,6 @@ void processFile(bool encrypt, std::string inputPath, std::string outputPath, st
 
             in.close();
 
-            // ----- Setup decryption -----
             GCM<AES>::Decryption d;
             d.SetKeyWithIV(key, key.size(), iv, IV_SIZE);
 
@@ -115,7 +104,6 @@ void processFile(bool encrypt, std::string inputPath, std::string outputPath, st
                 new Redirector(df)
             );
 
-            // If we reach here → authentication succeeded
             std::ofstream out(outputPath, std::ios::binary);
             out.write(decrypted.data(), decrypted.size());
             out.close();
