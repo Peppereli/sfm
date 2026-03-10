@@ -3,10 +3,9 @@
 #include <vector>
 #include "core/functions.h"
 
-// Helper for string input
 std::string get_input_str(int y, int x, const std::string& prompt, bool mask = false) {
     mvprintw(y, x, "%s", prompt.c_str());
-    clrtoeol(); // Clear any old text on this line
+    clrtoeol();
     echo();
     if (mask) noecho();
     
@@ -53,7 +52,6 @@ int main() {
 
     int highlight = 1;
     while(true) {
-        // Draw Menu
         clear();
         box(stdscr, 0, 0);
         attron(A_BOLD | COLOR_PAIR(1));
@@ -72,32 +70,28 @@ int main() {
         refresh();
 
         int c = getch();
-        // --- VIM KEY LOGIC ---
         if (c == 'k' || c == KEY_UP) {
             highlight = (highlight == 1) ? menu.size() : highlight - 1;
         } else if (c == 'j' || c == KEY_DOWN) {
             highlight = (highlight == menu.size()) ? 1 : highlight + 1;
         } else if (c == 'q') {
             break;
-        } else if (c == 10 || c == 'l') { // Enter or 'l' to select
+        } else if (c == 10 || c == 'l') {
             if (highlight == 6) break;
 
             clear();
             box(stdscr, 0, 0);
             curs_set(1);
 
-            // --- PASSWORD GUARD ---
             std::string pass = get_input_str(2, 2, "Password: ", true);
             
-            // Check authentication BEFORE showing next prompts
             if (!manager.authenticateOrRegister("pass", pass)) {
                 update_status("INVALID PASSWORD! Access Denied.", true);
                 curs_set(0);
                 getch(); 
-                continue; // Skip the rest of the loop and return to menu
+                continue;
             }
 
-            // If we reach here, password is correct
             update_status("Authenticated.");
 
             if (highlight == 1) {
