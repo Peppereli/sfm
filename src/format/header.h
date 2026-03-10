@@ -34,12 +34,12 @@ struct SFMHeader {
 
 #pragma pack(push, 1)
 
-// Represents a single file stored INSIDE the encrypted vault
+// represents a single file stored INSIDE the encrypted vault
 struct FileEntry {
-    char filename[128]; // The name of the file 
-    uint64_t size;      // How big the file is in bytes
-    uint64_t offset;    // The byte position where this file's data begins inside the vault
-    bool isDeleted;     // A flag for your secure shredding feature (true = securely wiped). We can change that bool into uint8_t later if we want to save space, but for now let's keep it simple
+    char filename[128];
+    uint64_t size;
+    uint64_t offset;
+    bool isDeleted;
 };
 
 const int MAX_FILES_PER_VAULT = 100;
