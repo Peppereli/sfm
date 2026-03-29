@@ -7,8 +7,7 @@
     pacman -S mingw-w64-ucrt-x86_64-ncurses
     ```
 ### For Linux
-1.  Install the Crypto++ and ncurses development packages (look up the package names in your distro):
-2.  
+    Install the Crypto++ and ncurses development packages (look up the package names in your distro):  
     Debian:
     ```bash
     sudo apt install libncursesw-dev
