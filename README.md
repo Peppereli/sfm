@@ -14,6 +14,7 @@ Debian:
     sudo apt install libncursesw-dev
     sudo apt install libcrypto++-dev
     ```
+    
 Void Linux:
     ```bash
     sudo xbps-install -S ncurses-devel
