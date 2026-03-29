@@ -3,6 +3,8 @@
 #include <fstream>
 #include <vector>
 #include <cstring>
+#include <filesystem>
+#include <cstdlib>
 
 #include <cryptopp/osrng.h>
 #include <cryptopp/scrypt.h>
@@ -17,10 +19,35 @@
 
 using namespace CryptoPP;
 
+std::string getSFMDirectory() {
+#ifdef _WIN32
+    const char* home = std::getenv("USERPROFILE");
+#else
+    const char* home = std::getenv("HOME");
+#endif
+
+    std::string path;
+
+    if (home) {
+        path = std::string(home) + "/.sfm";
+    } else {
+        path = ".sfm"; // fallback
+    }
+
+    std::filesystem::create_directories(path);
+    return path;
+}
+
+std::string resolvePath(const std::string& filename) {
+    std::string sfmPath = getSFMDirectory() + "/" + filename;
+    if (std::filesystem::exists(sfmPath)) return sfmPath;
+    return filename;
+}
+
 ContainerManager::ContainerManager() { }
 
 bool ContainerManager::createContainer(const std::string& filePath, const std::string& password, long sizeInBytes) {
-    std::cout << "[Core] Initializing Secure Container..." << std::endl;
+    std::cout << "[Core] Initializing Secure Container...\n";
 
     SFMHeader header = createDefaultHeader();
 
@@ -70,10 +97,11 @@ bool ContainerManager::createContainer(const std::string& filePath, const std::s
         filter.MessageEnd();
         file.close();
 
+        masterKey.CleanNew(masterKey.size());
         return true;
 
     } catch (const Exception& e) {
-        std::cerr << "[Crypto Error] " << e.what() << std::endl;
+        std::cerr << "[Crypto Error] " << e.what() << "\n";
         return false;
     }
 }
@@ -83,9 +111,10 @@ SFMHeader ContainerManager::createDefaultHeader() {
     std::memset(&header, 0, sizeof(SFMHeader));
     header.magic[0] = 'S'; header.magic[1] = 'F'; header.magic[2] = 'M'; header.magic[3] = '\0';
     header.version = 1;
-    header.algoType = 1; 
-    header.kdfIterations = 16384;
-    header.kdfMemoryCost = 8;
+    header.algoType = 1;
+    header.kdfIterations = 32768;
+    header.kdfMemoryCost = 64;
+
     return header;
 }
 
@@ -95,21 +124,28 @@ void ContainerManager::generateRandomSalt(uint8_t* buffer, int length) {
 }
 
 bool ContainerManager::openContainer(const std::string& filePath, const std::string& password) {
-    std::cout << "[Core] Attempting to open container..." << std::endl;
+    std::cout << "[Core] Attempting to open container...\n";
 
     std::ifstream file(filePath, std::ios::binary);
     if (!file.is_open()) {
-        std::cerr << "[Error] File not found!" << std::endl;
+        std::cerr << "[Error] File not found!\n";
         return false;
     }
 
     SFMHeader header;
     file.read(reinterpret_cast<char*>(&header), sizeof(SFMHeader));
+
     if (header.magic[0] != 'S' || header.magic[1] != 'F' || 
         header.magic[2] != 'M' || header.magic[3] != '\0') {
-        std::cerr << "[Error] Invalid file format! Not an SFM container." << std::endl;
+        std::cerr << "[Error] Invalid file format!\n";
         return false;
     }
+
+    if (header.version != 1) {
+        std::cerr << "[Error] Unsupported version.\n";
+        return false;
+    }
+
     SecByteBlock masterKey(32);
     Scrypt kdf;
     kdf.DeriveKey(
@@ -119,185 +155,127 @@ bool ContainerManager::openContainer(const std::string& filePath, const std::str
         header.kdfMemoryCost,
         header.kdfIterations
     );
+
     try {
         const int indexSize = sizeof(VaultIndex);
         std::vector<byte> encryptedIndex(indexSize);
         file.read(reinterpret_cast<char*>(encryptedIndex.data()), indexSize);
 
-        if (file.gcount() < indexSize) {
-            std::cerr << "[Error] File is too short/corrupted." << std::endl;
-            return false;
-        }
-
         GCM<AES>::Decryption decryptor;
         decryptor.SetKeyWithIV(masterKey, masterKey.size(), header.encryptionNonce, NONCE_SIZE);
 
         VaultIndex index;
-        decryptor.ProcessData(reinterpret_cast<byte*>(&index), encryptedIndex.data(), indexSize);
+
+        AuthenticatedDecryptionFilter df(
+            decryptor,
+            new ArraySink(reinterpret_cast<byte*>(&index), sizeof(VaultIndex)),
+            AuthenticatedDecryptionFilter::THROW_EXCEPTION
+        );
+
+        df.Put(encryptedIndex.data(), encryptedIndex.size());
+        df.MessageEnd();
 
         if (index.fileCount > MAX_FILES_PER_VAULT) {
-            std::cerr << "[Access Denied] Incorrect Password or Corrupted Vault." << std::endl;
+            std::cerr << "[Access Denied]\n";
             return false;
         }
 
-        std::cout << "[Success] Password Correct! Vault Unlocked." << std::endl;
-        std::cout << "[Vault Info] Found " << index.fileCount << " files inside." << std::endl;
+        std::cout << "[Success] Vault Unlocked.\n";
 
+        masterKey.CleanNew(masterKey.size());
         return true;
 
     } catch (const Exception& e) {
-        std::cerr << "[Crypto Error] " << e.what() << std::endl;
+        std::cerr << "[Crypto Error] " << e.what() << "\n";
         return false;
     }
 }
+
 bool ContainerManager::encryptFile(const std::string& inputPath, const std::string& outputPath, const std::string& password) {
-    std::cout << "[Core] Encrypting file: " << inputPath << " -> " << outputPath << std::endl;
+    std::cout << "[Core] Encrypting file: " << inputPath << "\n";
 
     try {
         std::ifstream inFile(inputPath, std::ios::binary);
-        if (!inFile.is_open()) {
-            std::cerr << "[Error] Input file not found." << std::endl;
-            return false;
-        }
-        std::ofstream outFile(outputPath, std::ios::binary);
-        if (!outFile.is_open()) return false;
+        if (!inFile.is_open()) return false;
+
+        std::string realOutput = getSFMDirectory() + "/" + outputPath;
+        std::ofstream outFile(realOutput, std::ios::binary);
+
         SFMHeader header = createDefaultHeader();
-        
+
         AutoSeededRandomPool prng;
         prng.GenerateBlock(header.kdfSalt, SALT_SIZE);
         prng.GenerateBlock(header.encryptionNonce, NONCE_SIZE);
+
         SecByteBlock masterKey(32);
         Scrypt kdf;
-        kdf.DeriveKey(
-            masterKey, masterKey.size(),
+        kdf.DeriveKey(masterKey, masterKey.size(),
             (const byte*)password.data(), password.size(),
             header.kdfSalt, SALT_SIZE,
             header.kdfMemoryCost,
-            header.kdfIterations
-        );
+            header.kdfIterations);
+
         outFile.write(reinterpret_cast<const char*>(&header), sizeof(SFMHeader));
+
         GCM<AES>::Encryption encryptor;
         encryptor.SetKeyWithIV(masterKey, masterKey.size(), header.encryptionNonce, NONCE_SIZE);
+
         FileSource fs(inFile, true,
             new AuthenticatedEncryptionFilter(encryptor,
                 new FileSink(outFile)
             )
         );
 
-        std::cout << "[Success] File encrypted successfully." << std::endl;
+        std::cout << "[Success] Stored in: " << realOutput << "\n";
+
+        masterKey.CleanNew(masterKey.size());
         return true;
 
-    } catch (const Exception& e) {
-        std::cerr << "[Crypto Error] " << e.what() << std::endl;
+    } catch (...) {
         return false;
     }
 }
 
 bool ContainerManager::decryptFile(const std::string& inputPath, const std::string& outputPath, const std::string& password) {
-    std::cout << "[Core] Decrypting file: " << inputPath << " -> " << outputPath << std::endl;
+    std::cout << "[Core] Decrypting file: " << inputPath << "\n";
 
     try {
-        std::ifstream inFile(inputPath, std::ios::binary);
-        if (!inFile.is_open()) {
-            std::cerr << "[Error] Input file not found." << std::endl;
-            return false;
-        }
+        std::string realInput = resolvePath(inputPath);
+        std::ifstream inFile(realInput, std::ios::binary);
+        if (!inFile.is_open()) return false;
+
         SFMHeader header;
         inFile.read(reinterpret_cast<char*>(&header), sizeof(SFMHeader));
-        if (header.magic[0] != 'S' || header.magic[1] != 'F' || header.magic[2] != 'M') {
-            std::cerr << "[Error] Invalid SFM file format." << std::endl;
-            return false;
-        }
+
         SecByteBlock masterKey(32);
         Scrypt kdf;
-        kdf.DeriveKey(
-            masterKey, masterKey.size(),
+        kdf.DeriveKey(masterKey, masterKey.size(),
             (const byte*)password.data(), password.size(),
             header.kdfSalt, SALT_SIZE,
             header.kdfMemoryCost,
-            header.kdfIterations
-        );
+            header.kdfIterations);
+
         GCM<AES>::Decryption decryptor;
         decryptor.SetKeyWithIV(masterKey, masterKey.size(), header.encryptionNonce, NONCE_SIZE);
+
         std::ofstream outFile(outputPath, std::ios::binary);
-        
+
         FileSource fs(inFile, true,
             new AuthenticatedDecryptionFilter(decryptor,
                 new FileSink(outFile)
             )
         );
 
-        std::cout << "[Success] File decrypted successfully." << std::endl;
+        std::cout << "[Success] Decrypted successfully.\n";
+
+        masterKey.CleanNew(masterKey.size());
         return true;
 
-    } catch (const Exception& e) {
-        std::cerr << "[Crypto Error] Decryption failed (Wrong password or corrupted file)." << std::endl;
+    } catch (...) {
+        std::cerr << "[Crypto Error] Decryption failed.\n";
         return false;
     }
 }
-
-bool ContainerManager::secureDeleteFile(const std::string& filePath) {
-    std::cout << "[Core] Securely wiping file: " << filePath << std::endl;
-
-    std::fstream file(filePath, std::ios::binary | std::ios::in | std::ios::out);
-    if (!file.is_open()) {
-        std::cerr << "[Error] File not found or currently in use." << std::endl;
-        return false;
-    }
-
-    file.seekg(0, std::ios::end);
-    long fileSize = file.tellg();
-    file.seekg(0, std::ios::beg);
-
-    if (fileSize == 0) {
-        file.close();
-        std::remove(filePath.c_str());
-        std::cout << "[Success] Empty file deleted." << std::endl;
-        return true;
-    }
-
-    const int BUFFER_SIZE = 4096;
-    std::vector<char> buffer(BUFFER_SIZE);
-
-    std::cout << "[Wipe] Pass 1/3: Overwriting with zeros..." << std::endl;
-    std::fill(buffer.begin(), buffer.end(), 0x00);
-    for (long i = 0; i < fileSize; i += BUFFER_SIZE) {
-        long chunk = (fileSize - i < BUFFER_SIZE) ? (fileSize - i) : BUFFER_SIZE;
-        file.write(buffer.data(), chunk);
-    }
-    file.flush();
-    file.seekg(0, std::ios::beg);
-
-    std::cout << "[Wipe] Pass 2/3: Overwriting with ones..." << std::endl;
-    std::fill(buffer.begin(), buffer.end(), 0xFF);
-    for (long i = 0; i < fileSize; i += BUFFER_SIZE) {
-        long chunk = (fileSize - i < BUFFER_SIZE) ? (fileSize - i) : BUFFER_SIZE;
-        file.write(buffer.data(), chunk);
-    }
-    file.flush();
-    file.seekg(0, std::ios::beg);
-
-    std::cout << "[Wipe] Pass 3/3: Overwriting with random data..." << std::endl;
-    AutoSeededRandomPool prng;
-    for (long i = 0; i < fileSize; i += BUFFER_SIZE) {
-        long chunk = (fileSize - i < BUFFER_SIZE) ? (fileSize - i) : BUFFER_SIZE;
-        prng.GenerateBlock(reinterpret_cast<byte*>(buffer.data()), chunk);
-        file.write(buffer.data(), chunk);
-    }
-    file.flush();
-    
-    file.close();
-
-    if (std::remove(filePath.c_str()) == 0) {
-        std::cout << "[Success] File securely wiped and deleted." << std::endl;
-        return true;
-    } else {
-        std::cerr << "[Error] Failed to delete file record (data is wiped though)." << std::endl;
-        return false;
-    }
-}
-
-// Password hash and storage
 std::string ContainerManager::hashMasterPassword(const std::string& password) {
     SHA256 hash;
     std::string digest;
@@ -312,6 +290,7 @@ std::string ContainerManager::hashMasterPassword(const std::string& password) {
 
     return digest;
 }
+
 bool ContainerManager::authenticateOrRegister(const std::string& hashFile, const std::string& password) {
     std::ifstream inFile(hashFile);
     std::string storedHash;
@@ -322,7 +301,7 @@ bool ContainerManager::authenticateOrRegister(const std::string& hashFile, const
         if (currentHash == storedHash) {
             return true; 
         } else {
-            std::cerr << "[Critical] Access Denied: Incorrect Password." << std::endl;
+            std::cerr << "[Critical] Access Denied: Incorrect Password.\n";
             return false;
         }
     } else {
@@ -330,7 +309,68 @@ bool ContainerManager::authenticateOrRegister(const std::string& hashFile, const
         if (!outFile) return false;
 
         outFile << currentHash;
-        std::cout << "[Info] No password file found. New password registered." << std::endl;
+        std::cout << "[Info] No password file found. New password registered.\n";
         return true;
     }
 }
+bool ContainerManager::secureDeleteFile(const std::string& filePath) {
+    std::cout << "[Core] Securely wiping file: " << filePath << "\n";
+
+    std::fstream file(filePath, std::ios::binary | std::ios::in | std::ios::out);
+    if (!file.is_open()) {
+        std::cerr << "[Error] File not found or currently in use.\n";
+        return false;
+    }
+
+    file.seekg(0, std::ios::end);
+    long fileSize = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    if (fileSize == 0) {
+        file.close();
+        std::remove(filePath.c_str());
+        std::cout << "[Success] Empty file deleted.\n";
+        return true;
+    }
+
+    const int BUFFER_SIZE = 4096;
+    std::vector<char> buffer(BUFFER_SIZE);
+
+    std::cout << "[Wipe] Pass 1/3: Overwriting with zeros...\n";
+    std::fill(buffer.begin(), buffer.end(), 0x00);
+    for (long i = 0; i < fileSize; i += BUFFER_SIZE) {
+        long chunk = (fileSize - i < BUFFER_SIZE) ? (fileSize - i) : BUFFER_SIZE;
+        file.write(buffer.data(), chunk);
+    }
+    file.flush();
+    file.seekg(0, std::ios::beg);
+
+    std::cout << "[Wipe] Pass 2/3: Overwriting with ones...\n";
+    std::fill(buffer.begin(), buffer.end(), 0xFF);
+    for (long i = 0; i < fileSize; i += BUFFER_SIZE) {
+        long chunk = (fileSize - i < BUFFER_SIZE) ? (fileSize - i) : BUFFER_SIZE;
+        file.write(buffer.data(), chunk);
+    }
+    file.flush();
+    file.seekg(0, std::ios::beg);
+
+    std::cout << "[Wipe] Pass 3/3: Overwriting with random data...\n";
+    AutoSeededRandomPool prng;
+    for (long i = 0; i < fileSize; i += BUFFER_SIZE) {
+        long chunk = (fileSize - i < BUFFER_SIZE) ? (fileSize - i) : BUFFER_SIZE;
+        prng.GenerateBlock(reinterpret_cast<byte*>(buffer.data()), chunk);
+        file.write(buffer.data(), chunk);
+    }
+    file.flush();
+    
+    file.close();
+
+    if (std::remove(filePath.c_str()) == 0) {
+        std::cout << "[Success] File securely wiped and deleted.\n";
+        return true;
+    } else {
+        std::cerr << "[Error] Failed to delete file record (data is wiped though).\n";
+        return false;
+    }
+}
+

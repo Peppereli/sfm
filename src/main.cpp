@@ -1,7 +1,6 @@
 #include <iostream>
 #include <string>
 #include "core/functions.h"
-
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         std::cout << "Usage: sfm_tool <command> <args...>\n";
@@ -32,7 +31,7 @@ int main(int argc, char* argv[]) {
         long sizeBytes = sizeMb * 1024 * 1024;
         
         if (manager.createContainer(filePath, password, sizeBytes)) {
-            std::cout << "Container created!" << std::endl;
+            std::cout << "Container created!\n";
         }
     } 
     else if (command == "open") {
@@ -42,7 +41,7 @@ int main(int argc, char* argv[]) {
 
     else if (command == "enc") {
         if (argc < 4) {
-            std::cout << "Usage: sfm_tool enc <input> <output>" << std::endl;
+            std::cout << "Usage: sfm_tool enc <input> <output>\n";
             return 1;
         }
         std::string input = argv[2];
@@ -51,7 +50,7 @@ int main(int argc, char* argv[]) {
     }
     else if (command == "dec") {
         if (argc < 4) {
-            std::cout << "Usage: sfm_tool dec <input> <output>" << std::endl;
+            std::cout << "Usage: sfm_tool dec <input> <output>\n";
             return 1;
         }
         std::string input = argv[2];
@@ -60,18 +59,18 @@ int main(int argc, char* argv[]) {
     }
     else if (command == "del") {
         std::string filePath = argv[2];
-        std::cout << "WARNING: This will permanently destroy data in: " << filePath << std::endl;
+        std::cout << "WARNING: This will permanently destroy data in: " << filePath << "\n";
         std::cout << "Are you sure? (y/n): ";
         char confirm;
         std::cin >> confirm;
         if (confirm == 'y' || confirm == 'Y') {
             manager.secureDeleteFile(filePath);
         } else {
-            std::cout << "Operation cancelled." << std::endl;
+            std::cout << "Operation cancelled.\n";
         }
     }
     else {
-        std::cout << "Unknown command." << std::endl;
+        std::cout << "Unknown command.\n";
     }
 
     return 0;

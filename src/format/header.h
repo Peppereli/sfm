@@ -34,7 +34,6 @@ struct SFMHeader {
 
 #pragma pack(push, 1)
 
-// represents a single file stored INSIDE the encrypted vault
 struct FileEntry {
     char filename[128];
     uint64_t size;
@@ -50,3 +49,4 @@ struct VaultIndex {
 };
 
 #pragma pack(pop)
+
