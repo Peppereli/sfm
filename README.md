@@ -10,13 +10,11 @@
 Install the Crypto++ and ncurses development packages (look up the package names in your distro):
 
 Debian:
-
     ```bash
     sudo apt install libncursesw-dev
     sudo apt install libcrypto++-dev
     ```
 Void Linux:
-
     ```bash
     sudo xbps-install -S ncurses-devel
     sudo xbps-install -S crypto++-devel    
