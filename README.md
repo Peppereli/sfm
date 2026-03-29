@@ -1,4 +1,4 @@
-### Windows (MSYS2 / MinGW)
+### For Windows (MSYS2 / MinGW)
 1.  Open your MSYS2 terminal (UCRT64).
 2.  Install the toolchain and library:
     ```bash
