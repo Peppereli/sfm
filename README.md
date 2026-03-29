@@ -7,7 +7,6 @@
     pacman -S mingw-w64-ucrt-x86_64-ncurses
     ```
 
----
 
 ## Compilation Instructions
 
@@ -42,7 +41,6 @@ g++ src/tools/aes.cpp -o aes -lcryptopp
 
 ```
 
----
 
 ## Runtime Setup (Windows Only)
 
@@ -57,7 +55,6 @@ cp /c/msys64/ucrt64/bin/libwinpthread-1.dll .
 
 ```
 
----
 
 ## Usage
 
@@ -87,7 +84,6 @@ Checks if the password is correct by attempting to decrypt the first block.
 * **Success:** Prints `[Success] Password Correct! Container is valid.`
 * **Failure:** Prints `[Access Denied] Incorrect Password.`
 
----
 
 ## Project Structure
 
