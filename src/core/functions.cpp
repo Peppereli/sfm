@@ -229,6 +229,15 @@ bool ContainerManager::encryptFile(const std::string& inputPath, const std::stri
         std::cout << "[Success] Stored in: " << realOutput << "\n";
 
         masterKey.CleanNew(masterKey.size());
+
+        //the thing that ends the usage of file that we want to wipe
+        inFile.close();
+        outFile.close();
+
+        //securely wipe the original unencrypted file
+        std::cout << "[Cleanup] Wiping original file...\n";
+        secureDeleteFile(inputPath);
+        
         return true;
 
     } catch (...) {
@@ -269,6 +278,15 @@ bool ContainerManager::decryptFile(const std::string& inputPath, const std::stri
         std::cout << "[Success] Decrypted successfully.\n";
 
         masterKey.CleanNew(masterKey.size());
+
+        //the thing that ends the usage of file that we want to wipe
+        inFile.close();
+        outFile.close();
+
+        //securely wipe the original encrypted file
+        std::cout << "[Cleanup] Wiping encrypted file...\n";
+        secureDeleteFile(realInput);
+        
         return true;
 
     } catch (...) {
