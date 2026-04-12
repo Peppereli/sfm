@@ -33,7 +33,7 @@ void update_status(const std::string& msg, bool is_error = false) {
     refresh();
 }
 
-std::string file_browser(const std::string& start_dir) {
+std::string file_browser(const std::string& start_dir, ContainerManager* manager = nullptr) {
     std::string current_dir = start_dir;
     int highlight = 0;
 
@@ -61,7 +61,15 @@ std::string file_browser(const std::string& start_dir) {
         display_list.push_back(".. (Parent Directory)");
         for (const auto& e : entries) {
             std::string name = e.path().filename().string();
-            if (e.is_directory()) name = "[DIR] " + name;
+            if (e.is_directory()) {
+                name = "[DIR] " + name;
+            } 
+            else if (manager != nullptr) {
+                std::string cmt = manager->getFileComment(e.path().string());
+                if (!cmt.empty()) {
+                    name += "  // " + cmt;
+                }
+            }
             display_list.push_back(name);
         }
 
@@ -177,14 +185,36 @@ int main() {
                 manager.openContainer(path, pass);
             }
             else if (highlight == 3) {
-                std::string in = get_input_str(4, 2, "File to Encrypt: ");
-                std::string out = get_input_str(5, 2, "Output Name: ");
-                manager.encryptFile(in, out, pass);
+                clear();
+                std::string in = file_browser(fs::current_path().string());
+                if (!in.empty()) {
+                    clear();
+                    box(stdscr, 0, 0);
+                    std::string out = fs::path(in).filename().string();
+                    mvprintw(2, 2, "Encrypting: %s", out.c_str());
+                    
+                    // asking for a comment
+                    std::string comment = get_input_str(4, 2, "Comment (optional, Enter to skip): ");
+                    
+                    mvprintw(6, 2, "Processing...");
+                    refresh();
+                    
+                    manager.encryptFile(in, out, pass, comment);
+                }
             }
             else if (highlight == 4) {
-                std::string in = get_input_str(4, 2, "File to Decrypt: ");
-                std::string out = get_input_str(5, 2, "Output Name: ");
-                manager.decryptFile(in, out, pass);
+                clear();
+                // asking a browser to show a comment 
+                std::string in = file_browser(getSFMDirectory(), &manager);
+                if (!in.empty()) {
+                    clear();
+                    box(stdscr, 0, 0);
+                    std::string out = fs::current_path().string() + "/" + fs::path(in).filename().string();
+                    mvprintw(2, 2, "Decrypting to: %s", out.c_str());
+                    refresh();
+                    
+                    manager.decryptFile(in, out, pass);
+                }
             }
             else if (highlight == 5) {
                 std::string path = get_input_str(4, 2, "File to Wipe: ");
