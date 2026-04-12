@@ -16,6 +16,7 @@ struct SFMHeader {
     uint32_t kdfMemoryCost;
     uint8_t kdfSalt[SALT_SIZE];
     uint8_t encryptionNonce[NONCE_SIZE];
+    char comment[128]; //128 byte for a comment on encrypted file
 };
 
 struct VaultIndex {
@@ -28,9 +29,11 @@ public:
 
     bool createContainer(const std::string& filePath, const std::string& password, long sizeInBytes);
     bool openContainer(const std::string& filePath, const std::string& password);
-    bool encryptFile(const std::string& inputPath, const std::string& outputPath, const std::string& password);
+    bool encryptFile(const std::string& inputPath, const std::string& outputPath, const std::string& password, const std::string& comment = "");
     bool decryptFile(const std::string& inputPath, const std::string& outputPath, const std::string& password);
     bool secureDeleteFile(const std::string& filePath);
+
+    std::string getFileComment(const std::string& filePath); // method for reading comment
 
     std::string hashMasterPassword(const std::string& password);
     bool authenticateOrRegister(const std::string& hashFile, const std::string& password);
