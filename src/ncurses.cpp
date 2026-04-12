@@ -1,7 +1,11 @@
 #include <ncurses.h>
 #include <string>
 #include <vector>
+#include <filesystem>
+#include <algorithm>
 #include "core/functions.h"
+
+namespace fs = std::filesystem;
 
 std::string get_input_str(int y, int x, const std::string& prompt, bool mask = false) {
     mvprintw(y, x, "%s", prompt.c_str());
@@ -27,6 +31,75 @@ void update_status(const std::string& msg, bool is_error = false) {
     attroff(COLOR_PAIR(2) | A_BOLD);
     attroff(A_REVERSE);
     refresh();
+}
+
+std::string file_browser(const std::string& start_dir) {
+    std::string current_dir = start_dir;
+    int highlight = 0;
+
+    while (true) {
+        clear();
+        box(stdscr, 0, 0);
+        attron(A_BOLD);
+        mvprintw(1, 2, " [ Dir: %s ] ", current_dir.c_str());
+        attroff(A_BOLD);
+
+        std::vector<fs::directory_entry> entries;
+        try {
+            for (const auto& entry : fs::directory_iterator(current_dir)) {
+                entries.push_back(entry);
+            }
+        } catch (...) {}
+
+        std::sort(entries.begin(), entries.end(), [](const fs::directory_entry& a, const fs::directory_entry& b) {
+            if (a.is_directory() && !b.is_directory()) return true;
+            if (!a.is_directory() && b.is_directory()) return false;
+            return a.path().filename().string() < b.path().filename().string();
+        });
+
+        std::vector<std::string> display_list;
+        display_list.push_back(".. (Parent Directory)");
+        for (const auto& e : entries) {
+            std::string name = e.path().filename().string();
+            if (e.is_directory()) name = "[DIR] " + name;
+            display_list.push_back(name);
+        }
+
+        int max_lines = LINES - 4;
+        int offset = (highlight >= max_lines) ? (highlight - max_lines + 1) : 0;
+
+        for (int i = 0; i < max_lines && (i + offset) < display_list.size(); i++) {
+            int idx = i + offset;
+            if (idx == highlight) attron(A_REVERSE);
+            mvprintw(i + 3, 4, " %s ", display_list[idx].c_str());
+            if (idx == highlight) attroff(A_REVERSE);
+        }
+        
+        mvprintw(LINES - 2, 2, " Use j/k to navigate, ENTER to select, 'q' to cancel.");
+        refresh();
+
+        int c = getch();
+        if (c == 'k' || c == KEY_UP) {
+            if (highlight > 0) highlight--;
+        } else if (c == 'j' || c == KEY_DOWN) {
+            if (highlight < display_list.size() - 1) highlight++;
+        } else if (c == 'q') {
+            return "";
+        } else if (c == 10 || c == 'l') {
+            if (highlight == 0) {
+                current_dir = fs::path(current_dir).parent_path().string();
+                highlight = 0;
+            } else {
+                auto selected = entries[highlight - 1];
+                if (selected.is_directory()) {
+                    current_dir = selected.path().string();
+                    highlight = 0;
+                } else {
+                    return selected.path().string();
+                }
+            }
+        }
+    }
 }
 
 int main() {
