@@ -191,7 +191,7 @@ bool ContainerManager::openContainer(const std::string& filePath, const std::str
     }
 }
 
-bool ContainerManager::encryptFile(const std::string& inputPath, const std::string& outputPath, const std::string& password) {
+bool ContainerManager::encryptFile(const std::string& inputPath, const std::string& outputPath, const std::string& password, const std::string& comment) { // comment
     std::cout << "[Core] Encrypting file: " << inputPath << "\n";
 
     try {
@@ -202,6 +202,8 @@ bool ContainerManager::encryptFile(const std::string& inputPath, const std::stri
         std::ofstream outFile(realOutput, std::ios::binary);
 
         SFMHeader header = createDefaultHeader();
+
+        std::strncpy(header.comment, comment.c_str(), sizeof(header.comment) - 1); // copy the comment into the title
 
         AutoSeededRandomPool prng;
         prng.GenerateBlock(header.kdfSalt, SALT_SIZE);
@@ -307,6 +309,22 @@ std::string ContainerManager::hashMasterPassword(const std::string& password) {
     );
 
     return digest;
+}
+
+std::string ContainerManager::getFileComment(const std::string& filePath) {
+    std::ifstream file(filePath, std::ios::binary);
+    if (!file.is_open()) return "";
+
+    SFMHeader header;
+    file.read(reinterpret_cast<char*>(&header), sizeof(SFMHeader));
+
+    // cheking for exact encrypted file 
+    if (header.magic[0] == 'S' && header.magic[1] == 'F' && header.magic[2] == 'M') {
+        header.comment[sizeof(header.comment) - 1] = '\0';
+        return std::string(header.comment);
+    }
+    
+    return "";
 }
 
 bool ContainerManager::authenticateOrRegister(const std::string& hashFile, const std::string& password) {
