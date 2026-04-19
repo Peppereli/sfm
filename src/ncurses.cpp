@@ -26,11 +26,12 @@ void update_status(const std::string& msg, bool is_error = false) {
     if (is_error) attron(COLOR_PAIR(2) | A_BOLD);
     else attron(A_REVERSE);
     
-    mvprintw(LINES - 1, 0, " STATUS: %s", msg.c_str());
+    mvprintw(LINES - 1, 0, " Status: %s", msg.c_str());
     
     attroff(COLOR_PAIR(2) | A_BOLD);
     attroff(A_REVERSE);
-    refresh();
+    wnoutrefresh(stdscr);
+    doupdate();
 }
 
 std::string file_browser(const std::string& start_dir, ContainerManager* manager = nullptr) {
@@ -38,7 +39,7 @@ std::string file_browser(const std::string& start_dir, ContainerManager* manager
     int highlight = 0;
 
     while (true) {
-        clear();
+        erase();
         box(stdscr, 0, 0);
         attron(A_BOLD);
         mvprintw(1, 2, " [ Dir: %s ] ", current_dir.c_str());
@@ -58,11 +59,10 @@ std::string file_browser(const std::string& start_dir, ContainerManager* manager
         });
 
         std::vector<std::string> display_list;
-        display_list.push_back(".. (Parent Directory)");
         for (const auto& e : entries) {
             std::string name = e.path().filename().string();
             if (e.is_directory()) {
-                name = "[DIR] " + name;
+                name = "[ ] " + name;
             } 
             else if (manager != nullptr) {
                 std::string cmt = manager->getFileComment(e.path().string());
@@ -77,37 +77,41 @@ std::string file_browser(const std::string& start_dir, ContainerManager* manager
         int offset = (highlight >= max_lines) ? (highlight - max_lines + 1) : 0;
 
         for (int i = 0; i < max_lines && (i + offset) < display_list.size(); i++) {
-            int idx = i + offset;
-            if (idx == highlight) attron(A_REVERSE);
-            mvprintw(i + 3, 4, " %s ", display_list[idx].c_str());
-            if (idx == highlight) attroff(A_REVERSE);
+             int idx = i + offset;
+             bool is_dir = entries[idx].is_directory();
+             if (idx == highlight) attron(A_REVERSE);
+             if (is_dir) attron(COLOR_PAIR(3));
+             mvprintw(i + 3, 4, " %s ", display_list[idx].c_str());
+             if (is_dir) attroff(COLOR_PAIR(3));
+             if (idx == highlight) attroff(A_REVERSE);
         }
-        
         mvprintw(LINES - 2, 2, " Use j/k to navigate, ENTER to select, 'q' to cancel.");
-        refresh();
-
+        wnoutrefresh(stdscr);
+        doupdate();
         int c = getch();
+
         if (c == 'k' || c == KEY_UP) {
-            if (highlight > 0) highlight--;
-        } else if (c == 'j' || c == KEY_DOWN) {
-            if (highlight < display_list.size() - 1) highlight++;
-        } else if (c == 'q') {
-            return "";
-        } else if (c == 10 || c == 'l') {
-            if (highlight == 0) {
-                current_dir = fs::path(current_dir).parent_path().string();
-                highlight = 0;
-            } else {
-                auto selected = entries[highlight - 1];
-                if (selected.is_directory()) {
-                    current_dir = selected.path().string();
-                    highlight = 0;
-                } else {
-                    return selected.path().string();
-                }
-            }
+           if (highlight > 0) highlight--;
+        }else if (c == 'j' || c == KEY_DOWN) {
+           if (highlight < display_list.size() - 1) highlight++;
+        }else if (c == 'h' || c == KEY_LEFT) {
+           auto parent = fs::path(current_dir).parent_path();
+           if (parent != current_dir)
+              current_dir = parent.string();
+              highlight = 0;
+        }else if (c == 'l' || c == KEY_RIGHT || c == 10) {
+              auto selected = entries[highlight];
+              if (selected.is_directory()) {
+              current_dir = selected.path().string();
+              highlight = 0;
+        }else {
+              return selected.path().string();
         }
+     highlight = 0;
+    }else if (c == 'q') {
+    return "";
     }
+}
 }
 
 int main() {
@@ -120,6 +124,7 @@ int main() {
 
     init_pair(1, COLOR_CYAN, COLOR_BLACK);
     init_pair(2, COLOR_RED, COLOR_BLACK);
+    init_pair(3, COLOR_BLUE, COLOR_BLACK);
 
     ContainerManager manager;
     std::vector<std::string> menu = {
@@ -133,10 +138,10 @@ int main() {
 
     int highlight = 1;
     while(true) {
-        clear();
+        erase();
         box(stdscr, 0, 0);
         attron(A_BOLD | COLOR_PAIR(1));
-        mvprintw(1, 2, " SFM CRYPTO (Vim Keys Enabled) ");
+        mvprintw(1, 2, " SFM ");
         attroff(A_BOLD | COLOR_PAIR(1));
 
         for(int i = 0; i < menu.size(); i++) {
@@ -148,7 +153,8 @@ int main() {
                 mvprintw(i + 3, 4, " %s ", menu[i].c_str());
             }
         }
-        refresh();
+        wnoutrefresh(stdscr);
+        doupdate();
 
         int c = getch();
         if (c == 'k' || c == KEY_UP) {
@@ -160,14 +166,14 @@ int main() {
         } else if (c == 10 || c == 'l') {
             if (highlight == 6) break;
 
-            clear();
+            erase();
             box(stdscr, 0, 0);
             curs_set(1);
 
             std::string pass = get_input_str(2, 2, "Password: ", true);
             
             if (!manager.authenticateOrRegister("pass", pass)) {
-                update_status("INVALID PASSWORD! Access Denied.", true);
+                update_status("Invalid Password! Access Denied.", true);
                 curs_set(0);
                 getch(); 
                 continue;
@@ -185,33 +191,38 @@ int main() {
                 manager.openContainer(path, pass);
             }
             else if (highlight == 3) {
-                clear();
+                erase();
                 std::string in = file_browser(fs::current_path().string());
                 if (!in.empty()) {
-                    clear();
+                    erase();
                     box(stdscr, 0, 0);
                     std::string out = fs::path(in).filename().string();
                     mvprintw(2, 2, "Encrypting: %s", out.c_str());
+                    clrtoeol();
+                    wnoutrefresh(stdscr);
+                    doupdate();
                     
-                    // asking for a comment
                     std::string comment = get_input_str(4, 2, "Comment (optional, Enter to skip): ");
                     
                     mvprintw(6, 2, "Processing...");
-                    refresh();
+                    clrtoeol();
+                    wnoutrefresh(stdscr);
+                    doupdate();
                     
                     manager.encryptFile(in, out, pass, comment);
                 }
             }
             else if (highlight == 4) {
-                clear();
-                // asking a browser to show a comment 
+                erase();
                 std::string in = file_browser(getSFMDirectory(), &manager);
                 if (!in.empty()) {
-                    clear();
+                    erase();
                     box(stdscr, 0, 0);
                     std::string out = fs::current_path().string() + "/" + fs::path(in).filename().string();
                     mvprintw(2, 2, "Decrypting to: %s", out.c_str());
-                    refresh();
+                    clrtoeol();
+                    wnoutrefresh(stdscr);
+                    doupdate();
                     
                     manager.decryptFile(in, out, pass);
                 }
@@ -225,6 +236,8 @@ int main() {
             curs_set(0);
             mvprintw(LINES - 2, 2, "Done. Press any key...");
             getch();
+            clear();
+            refresh();
         }
     }
 
