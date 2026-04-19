@@ -140,9 +140,9 @@ int main() {
     while(true) {
         erase();
         box(stdscr, 0, 0);
-        attron(A_BOLD | COLOR_PAIR(1));
+        attron(A_BOLD | COLOR_PAIR(3));
         mvprintw(1, 2, " SFM ");
-        attroff(A_BOLD | COLOR_PAIR(1));
+        attroff(A_BOLD | COLOR_PAIR(3));
 
         for(int i = 0; i < menu.size(); i++) {
             if(highlight == i + 1) {
@@ -171,6 +171,8 @@ int main() {
             curs_set(1);
 
             std::string pass = get_input_str(2, 2, "Password: ", true);
+            refresh();
+            clear();
             
             if (!manager.authenticateOrRegister("pass", pass)) {
                 update_status("Invalid Password! Access Denied.", true);
@@ -198,16 +200,14 @@ int main() {
                     box(stdscr, 0, 0);
                     std::string out = fs::path(in).filename().string();
                     mvprintw(2, 2, "Encrypting: %s", out.c_str());
-                    clrtoeol();
-                    wnoutrefresh(stdscr);
-                    doupdate();
+                    clear();
+                    refresh();
                     
                     std::string comment = get_input_str(4, 2, "Comment (optional, Enter to skip): ");
                     
                     mvprintw(6, 2, "Processing...");
-                    clrtoeol();
-                    wnoutrefresh(stdscr);
-                    doupdate();
+                    clear();
+                    refresh();
                     
                     manager.encryptFile(in, out, pass, comment);
                 }
@@ -220,10 +220,9 @@ int main() {
                     box(stdscr, 0, 0);
                     std::string out = fs::current_path().string() + "/" + fs::path(in).filename().string();
                     mvprintw(2, 2, "Decrypting to: %s", out.c_str());
-                    clrtoeol();
-                    wnoutrefresh(stdscr);
-                    doupdate();
-                    
+                    clear();
+                    refresh();
+
                     manager.decryptFile(in, out, pass);
                 }
             }

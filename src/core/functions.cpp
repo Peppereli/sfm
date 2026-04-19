@@ -326,9 +326,10 @@ std::string ContainerManager::getFileComment(const std::string& filePath) {
     
     return "";
 }
-
 bool ContainerManager::authenticateOrRegister(const std::string& hashFile, const std::string& password) {
-    std::ifstream inFile(hashFile);
+    std::string fullPath = getSFMDirectory() + "/" + hashFile;
+
+    std::ifstream inFile(fullPath);
     std::string storedHash;
     
     std::string currentHash = hashMasterPassword(password);
@@ -341,7 +342,7 @@ bool ContainerManager::authenticateOrRegister(const std::string& hashFile, const
             return false;
         }
     } else {
-        std::ofstream outFile(hashFile);
+        std::ofstream outFile(fullPath);
         if (!outFile) return false;
 
         outFile << currentHash;
