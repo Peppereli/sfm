@@ -37,6 +37,7 @@ void update_status(const std::string& msg, bool is_error = false) {
 std::string file_browser(const std::string& start_dir, ContainerManager* manager = nullptr) {
     std::string current_dir = start_dir;
     int highlight = 0;
+    int offset = 0;
 
     while (true) {
         erase();
@@ -74,7 +75,12 @@ std::string file_browser(const std::string& start_dir, ContainerManager* manager
         }
 
         int max_lines = LINES - 4;
-        int offset = (highlight >= max_lines) ? (highlight - max_lines + 1) : 0;
+        if (highlight < offset) {
+            offset = highlight;
+        } 
+         else if (highlight >= offset + max_lines) {
+            offset = highlight - max_lines + 1;
+        }
 
         for (int i = 0; i < max_lines && (i + offset) < display_list.size(); i++) {
              int idx = i + offset;
