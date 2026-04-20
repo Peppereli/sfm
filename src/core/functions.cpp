@@ -17,6 +17,12 @@
 
 #include <cstdio>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <commdlg.h>
+#endif
+
+
 using namespace CryptoPP;
 
 std::string getSFMDirectory() {
@@ -45,6 +51,119 @@ std::string resolvePath(const std::string& filename) {
 }
 
 ContainerManager::ContainerManager() { }
+
+
+bool ContainerManager::isPasswordSet(const std::string& hashFile) {
+    std::string fullPath = getSFMDirectory() + "/" + hashFile;
+    return std::filesystem::exists(fullPath);
+}
+
+bool ContainerManager::authenticate(const std::string& hashFile, const std::string& password) {
+    std::string fullPath = getSFMDirectory() + "/" + hashFile;
+    std::ifstream inFile(fullPath);
+    std::string storedHash;
+    if (inFile >> storedHash) {
+        return hashMasterPassword(password) == storedHash;
+    }
+    return false;
+}
+
+bool ContainerManager::setPassword(const std::string& hashFile, const std::string& newPassword) {
+    std::string fullPath = getSFMDirectory() + "/" + hashFile;
+    std::ofstream outFile(fullPath);
+    if (!outFile) return false;
+    outFile << hashMasterPassword(newPassword);
+    return true;
+}
+
+bool ContainerManager::changePassword(const std::string& hashFile, const std::string& oldPassword, const std::string& newPassword) {
+    if (authenticate(hashFile, oldPassword)) {
+        return setPassword(hashFile, newPassword);
+    }
+    return false;
+}
+
+std::string ContainerManager::saveFileDialog() {
+#ifdef _WIN32
+    char filename[MAX_PATH] = {0};
+    OPENFILENAMEA ofn;
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = NULL;
+    ofn.lpstrFilter = "SFM Vaults (*.sfm)\0*.sfm\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFile = filename;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_EXPLORER | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY | OFN_OVERWRITEPROMPT;
+    ofn.lpstrDefExt = "sfm";
+
+    if (GetSaveFileNameA(&ofn)) {
+        return std::string(filename);
+    }
+    return "";
+#else
+    char filename[1024] = {0};
+    FILE* f = popen("zenity --file-selection --save --confirm-overwrite --title=\"Create New Vault\"", "r");
+    if (f) {
+        if (fgets(filename, sizeof(filename), f) != nullptr) {
+            std::string result(filename);
+            size_t pos = result.find_last_not_of(" \n\r\t");
+            if (pos != std::string::npos) result.erase(pos + 1);
+            else result.clear();
+            pclose(f);
+            return result;
+        }
+        pclose(f);
+    }
+    return "";
+#endif
+}
+
+std::string ContainerManager::openFileDialog() {
+#ifdef _WIN32
+    char filename[MAX_PATH] = {0};
+    OPENFILENAMEA ofn;
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = NULL;
+    ofn.lpstrFilter = "All Files (*.*)\0*.*\0";
+    ofn.lpstrFile = filename;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+
+    if (GetOpenFileNameA(&ofn)) {
+        return std::string(filename);
+    }
+    return "";
+#else
+    char filename[1024] = {0};
+    FILE* f = popen("zenity --file-selection --title=\"Select File to Open\"", "r");
+    if (f) {
+        if (fgets(filename, sizeof(filename), f) != nullptr) {
+            std::string result(filename);
+            size_t pos = result.find_last_not_of(" \n\r\t");
+            if (pos != std::string::npos) result.erase(pos + 1);
+            else result.clear();
+            pclose(f);
+            return result;
+        }
+        pclose(f);
+    }
+    return "";
+#endif
+}
+
+void ContainerManager::openWithDefaultApp(const std::string& filePath) {
+#ifdef _WIN32
+    ShellExecuteA(NULL, "open", filePath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+#elif __APPLE__
+    std::string cmd = "open \"" + filePath + "\"";
+    std::system(cmd.c_str());
+#else
+    std::string cmd = "xdg-open \"" + filePath + "\" &";
+    std::system(cmd.c_str());
+#endif
+}
+ 
 
 bool ContainerManager::createContainer(const std::string& filePath, const std::string& password, long sizeInBytes) {
     std::cout << "[Core] Initializing Secure Container...\n";
@@ -326,30 +445,7 @@ std::string ContainerManager::getFileComment(const std::string& filePath) {
     
     return "";
 }
-bool ContainerManager::authenticateOrRegister(const std::string& hashFile, const std::string& password) {
-    std::string fullPath = getSFMDirectory() + "/" + hashFile;
 
-    std::ifstream inFile(fullPath);
-    std::string storedHash;
-    
-    std::string currentHash = hashMasterPassword(password);
-
-    if (inFile >> storedHash) {
-        if (currentHash == storedHash) {
-            return true; 
-        } else {
-            std::cerr << "[Critical] Access Denied: Incorrect Password.\n";
-            return false;
-        }
-    } else {
-        std::ofstream outFile(fullPath);
-        if (!outFile) return false;
-
-        outFile << currentHash;
-        std::cout << "[Info] No password file found. New password registered.\n";
-        return true;
-    }
-}
 bool ContainerManager::secureDeleteFile(const std::string& filePath) {
     std::cout << "[Core] Securely wiping file: " << filePath << "\n";
 
