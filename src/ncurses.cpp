@@ -133,12 +133,14 @@ int main() {
     init_pair(3, COLOR_BLUE, COLOR_BLACK);
 
     ContainerManager manager;
+    
     std::vector<std::string> menu = {
         "Create New Vault",
         "Open/Check Vault",
         "Encrypt File",
         "Decrypt File",
         "Secure Wipe",
+        "Change Password",
         "Exit"
     };
 
@@ -170,72 +172,128 @@ int main() {
         } else if (c == 'q') {
             break;
         } else if (c == 10 || c == 'l') {
-            if (highlight == 6) break;
+            if (highlight == 7) break;
 
             erase();
             box(stdscr, 0, 0);
             curs_set(1);
 
-            std::string pass = get_input_str(2, 2, "Password: ", true);
+            std::string pass;
+            
+            if (!manager.isPasswordSet("pass")) {
+                mvprintw(1, 2, "First time setup. Please create a master password.");
+                pass = get_input_str(3, 2, "Enter Password: ", true);
+                std::string pass2 = get_input_str(4, 2, "Confirm Password: ", true);
+                
+                if (pass != pass2 || pass.empty()) {
+                    update_status("Passwords do not match or empty!", true);
+                    curs_set(0); getch(); continue;
+                }
+                manager.setPassword("pass", pass);
+                update_status("Password registered successfully.");
+            } else {
+                pass = get_input_str(2, 2, "Password: ", true);
+                if (!manager.authenticate("pass", pass)) {
+                    update_status("Invalid Password! Access Denied.", true);
+                    curs_set(0); getch(); continue;
+                }
+                update_status("Authenticated.");
+            }
+
             refresh();
             clear();
-            
-            if (!manager.authenticateOrRegister("pass", pass)) {
-                update_status("Invalid Password! Access Denied.", true);
-                curs_set(0);
-                getch(); 
-                continue;
-            }
-
-            update_status("Authenticated.");
+            box(stdscr, 0, 0);
 
             if (highlight == 1) {
-                std::string path = get_input_str(4, 2, "Vault Name: ");
-                if (manager.createContainer(path, pass, 10 * 1024 * 1024))
-                    update_status("Created.");
+                update_status("Opening system dialog to create vault...");
+                endwin();
+                std::string path = manager.saveFileDialog();
+                refresh();
+                
+                if (!path.empty()) {
+                    if (manager.createContainer(path, pass, 10 * 1024 * 1024))
+                        update_status("Vault Created at: " + path);
+                    else
+                        update_status("Failed to create vault.", true);
+                } else {
+                    update_status("Creation cancelled.");
+                }
             }
-            else if (highlight == 2) {
-                std::string path = get_input_str(4, 2, "Open Vault: ");
-                manager.openContainer(path, pass);
+            else if (highlight == 2) { // Open/Check Vault
+                update_status("Opening system dialog to select vault...");
+                endwin();
+                std::string path = manager.openFileDialog();
+                refresh();
+                
+                if (!path.empty()) {
+                    if (manager.openContainer(path, pass)) {
+                        update_status("Vault unlocked. Opening with default OS tool...");
+                        manager.openWithDefaultApp(path);
+                    } else {
+                        update_status("Failed to open vault.", true);
+                    }
+                } else {
+                    update_status("Operation cancelled.");
+                }
             }
-            else if (highlight == 3) {
+            else if (highlight == 3) { // Encrypt File
                 erase();
                 std::string in = file_browser(fs::current_path().string());
                 if (!in.empty()) {
-                    erase();
-                    box(stdscr, 0, 0);
+                    erase(); box(stdscr, 0, 0);
                     std::string out = fs::path(in).filename().string();
                     mvprintw(2, 2, "Encrypting: %s", out.c_str());
-                    clear();
-                    refresh();
-                    
                     std::string comment = get_input_str(4, 2, "Comment (optional, Enter to skip): ");
-                    
                     mvprintw(6, 2, "Processing...");
-                    clear();
                     refresh();
                     
-                    manager.encryptFile(in, out, pass, comment);
+                    if (manager.encryptFile(in, out, pass, comment))
+                        update_status("Encrypted successfully.");
+                    else
+                        update_status("Encryption failed.", true);
                 }
             }
-            else if (highlight == 4) {
+            else if (highlight == 4) { // Decrypt File
                 erase();
                 std::string in = file_browser(getSFMDirectory(), &manager);
                 if (!in.empty()) {
-                    erase();
-                    box(stdscr, 0, 0);
+                    erase(); box(stdscr, 0, 0);
                     std::string out = fs::current_path().string() + "/" + fs::path(in).filename().string();
                     mvprintw(2, 2, "Decrypting to: %s", out.c_str());
-                    clear();
                     refresh();
 
-                    manager.decryptFile(in, out, pass);
+                    if (manager.decryptFile(in, out, pass))
+                        update_status("Decrypted successfully.");
+                    else
+                        update_status("Decryption failed.", true);
                 }
             }
-            else if (highlight == 5) {
+            else if (highlight == 5) { // Secure Wipe
                 std::string path = get_input_str(4, 2, "File to Wipe: ");
                 mvprintw(6, 2, "Confirm Wipe? (y/n): ");
-                if (getch() == 'y') manager.secureDeleteFile(path);
+                if (getch() == 'y') {
+                    if (manager.secureDeleteFile(path))
+                        update_status("Wiped successfully.");
+                    else
+                        update_status("Wipe failed.", true);
+                }
+            }
+            else if (highlight == 6) {
+                erase(); box(stdscr, 0, 0);
+                mvprintw(1, 2, "--- Change Password ---");
+                
+                std::string newPass = get_input_str(3, 2, "Enter New Password: ", true);
+                std::string newPass2 = get_input_str(4, 2, "Confirm New Password: ", true);
+                
+                if (newPass == newPass2 && !newPass.empty()) {
+                    if (manager.changePassword("pass", pass, newPass)) {
+                        update_status("Password changed successfully.");
+                    } else {
+                        update_status("Failed to change password.", true);
+                    }
+                } else {
+                    update_status("New passwords do not match or empty!", true);
+                }
             }
 
             curs_set(0);
@@ -249,3 +307,4 @@ int main() {
     endwin();
     return 0;
 }
+
