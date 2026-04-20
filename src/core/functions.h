@@ -36,7 +36,14 @@ public:
     std::string getFileComment(const std::string& filePath); // method for reading comment
 
     std::string hashMasterPassword(const std::string& password);
-    bool authenticateOrRegister(const std::string& hashFile, const std::string& password);
+    bool isPasswordSet(const std::string& hashFile);
+    bool authenticate(const std::string& hashFile, const std::string& password);
+    bool setPassword(const std::string& hashFile, const std::string& newPassword);
+    bool changePassword(const std::string& hashFile, const std::string& oldPassword, const std::string& newPassword);
+
+    std::string saveFileDialog();
+    std::string openFileDialog();
+    void openWithDefaultApp(const std::string& filePath);
 
 private:
     SFMHeader createDefaultHeader();
