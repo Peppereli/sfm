@@ -17,6 +17,8 @@
 
 #include <cstdio>
 
+#include <sstream>
+
 #ifdef _WIN32
 #include <windows.h>
 #include <commdlg.h>
@@ -505,5 +507,74 @@ bool ContainerManager::secureDeleteFile(const std::string& filePath) {
         std::cerr << "[Error] Failed to delete file record (data is wiped though).\n";
         return false;
     }
+}
+
+
+std::string ContainerManager::generateStrongPassword(int length) {
+    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
+    std::string password;
+    password.resize(length);
+    
+    AutoSeededRandomPool prng;
+    for (int i = 0; i < length; ++i) {
+        password[i] = charset[prng.GenerateByte() % (sizeof(charset) - 1)];
+    }
+    return password;
+}
+
+void ContainerManager::copyToClipboard(const std::string& text) {
+    std::string command;
+#ifdef _WIN32
+    command = "echo | set /p=\"" + text + "\" | clip";
+#elif __APPLE__
+    command = "echo -n \"" + text + "\" | pbcopy";
+#else
+    command = "echo -n \"" + text + "\" | xclip -selection clipboard";
+#endif
+    std::system(command.c_str());
+}
+
+bool ContainerManager::savePasswords(const std::vector<PasswordEntry>& entries, const std::string& masterPassword) {
+    std::string tempPath = getSFMDirectory() + "/.temp_pwd";
+    std::string encryptedPath = "passwords.sfm";
+
+    std::ofstream tempFile(tempPath);
+    if (!tempFile.is_open()) return false;
+
+    for (const auto& entry : entries) {
+        tempFile << entry.name << "|" << entry.login << "|" << entry.password << "\n";
+    }
+    tempFile.close();
+
+    bool success = encryptFile(tempPath, encryptedPath, masterPassword, "Password Manager DB");
+    secureDeleteFile(tempPath);
+    return success;
+}
+
+std::vector<PasswordEntry> ContainerManager::loadPasswords(const std::string& masterPassword) {
+    std::vector<PasswordEntry> entries;
+    std::string encryptedPath = "passwords.sfm";
+    std::string tempPath = getSFMDirectory() + "/.temp_pwd";
+
+    if (!std::filesystem::exists(resolvePath(encryptedPath))) {
+        return entries;
+    }
+
+    if (decryptFile(encryptedPath, tempPath, masterPassword)) {
+        std::ifstream tempFile(tempPath);
+        std::string line;
+        while (std::getline(tempFile, line)) {
+            std::istringstream iss(line);
+            std::string name, login, pass;
+            if (std::getline(iss, name, '|') && 
+                std::getline(iss, login, '|') && 
+                std::getline(iss, pass)) {
+                entries.push_back({name, login, pass});
+            }
+        }
+        tempFile.close();
+        secureDeleteFile(tempPath);
+    }
+    return entries;
 }
 
