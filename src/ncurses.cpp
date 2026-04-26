@@ -49,6 +49,11 @@ std::string file_browser(const std::string& start_dir, ContainerManager* manager
         std::vector<fs::directory_entry> entries;
         try {
             for (const auto& entry : fs::directory_iterator(current_dir)) {
+                std::string fname = entry.path().filename().string();
+                
+                if (fname == "pass" || fname == "passwords.sfm" || fname == ".temp_pwd") {
+                    continue; 
+                }
                 entries.push_back(entry);
             }
         } catch (...) {}
@@ -258,8 +263,16 @@ int main() {
                 erase();
                 std::string in = file_browser(getSFMDirectory(), &manager);
                 if (!in.empty()) {
+                    std::string filename = fs::path(in).filename().string();
+                    
+                    // ЖЕСТКАЯ БЛОКИРОВКА: запрещаем трогать системные файлы
+                    if (filename == "pass" || filename == "passwords.sfm" || filename == ".temp_pwd") {
+                        update_status("Access Denied: Cannot decrypt system files!", true);
+                        continue;
+                    }
+
                     erase(); box(stdscr, 0, 0);
-                    std::string out = fs::current_path().string() + "/" + fs::path(in).filename().string();
+                    std::string out = fs::current_path().string() + "/" + filename;
                     mvprintw(2, 2, "Decrypting to: %s", out.c_str());
                     refresh();
 
@@ -269,17 +282,56 @@ int main() {
                         update_status("Decryption failed.", true);
                 }
             }
+
             else if (highlight == 5) { // Secure Wipe
-                std::string path = get_input_str(4, 2, "File to Wipe: ");
-                mvprintw(6, 2, "Confirm Wipe? (y/n): ");
+                erase(); box(stdscr, 0, 0);
+                mvprintw(1, 2, " --- Secure Wipe --- ");
+                mvprintw(3, 4, "[1] Browse Current Directory");
+                mvprintw(4, 4, "[2] Browse .sfm Vault Directory");
+                mvprintw(6, 2, "Select location (1/2) or 'q' to cancel: ");
+                refresh();
+
+                int choice = getch();
+                std::string start_dir;
+
+                if (choice == '1') {
+                    start_dir = fs::current_path().string();
+                } else if (choice == '2') {
+                    start_dir = getSFMDirectory();
+                } else {
+                    update_status("Operation cancelled.");
+                    continue;
+                }
+
+                std::string path_to_wipe = file_browser(start_dir, &manager);
+
+                if (!path_to_wipe.empty()) {
+                    erase(); box(stdscr, 0, 0);
+                    attron(COLOR_PAIR(2) | A_BOLD);
+                    mvprintw(2, 2, "WARNING: This will permanently destroy:");
+                    attroff(COLOR_PAIR(2) | A_BOLD);
+                    mvprintw(3, 2, "%s", path_to_wipe.c_str());
+                    mvprintw(5, 2, "Are you sure? (y/n): ");
+                    refresh();
+
                 if (getch() == 'y') {
-                    if (manager.secureDeleteFile(path))
-                        update_status("Wiped successfully.");
-                    else
-                        update_status("Wipe failed.", true);
+                    mvprintw(7, 2, "Wiping... Please wait.");
+                    refresh();
+                if (manager.secureDeleteFile(path_to_wipe)) {
+                    update_status("File securely wiped and deleted.");
+                } else {
+                    update_status("Wipe failed (file might be in use).", true);
+                }
+                } else {
+                update_status("Wipe cancelled.");
+                }
+                } else {
+                    update_status("No file selected.");
                 }
             }
-                        else if (highlight == 6) { // Password Manager
+
+
+            else if (highlight == 6) { // Password Manager
                 erase(); box(stdscr, 0, 0);
                 mvprintw(1, 2, " Loading Password Database... ");
                 refresh();
@@ -304,12 +356,12 @@ int main() {
                         }
                     }
 
-                    mvprintw(LINES - 3, 2, " [a] Add  [g] Add (Auto-Gen Pass)  [c] Copy Pass  [u] Copy Login  [q] Back ");
+                    mvprintw(LINES - 3, 2, " [a] Add  [g] Gen  [e] Edit  [d] Del  [c] Copy Pass  [u] Copy Login  [q] Back ");
                     wnoutrefresh(stdscr); doupdate();
 
                     int ch = getch();
                     if (ch == 'q') {
-                        manager.savePasswords(passwords, pass); // Сохраняем и шифруем при выходе
+                        manager.savePasswords(passwords, pass);
                         pwd_running = false;
                     } 
                     else if (ch == 'k' || ch == KEY_UP) {
@@ -335,8 +387,40 @@ int main() {
 
                         if (!name.empty() && !login.empty() && !new_pass.empty()) {
                             passwords.push_back({name, login, new_pass});
-                            manager.savePasswords(passwords, pass); // Сразу сохраняем изменения
+                            manager.savePasswords(passwords, pass);
                             update_status("Password saved successfully.");
+                        }
+                    }
+                    else if (ch == 'e' && !passwords.empty()) {
+                        erase(); box(stdscr, 0, 0);
+                        mvprintw(1, 2, " --- Edit Entry --- ");
+                        mvprintw(2, 2, " (Leave blank and press Enter to keep current value) ");
+                        
+                        std::string new_name = get_input_str(4, 2, "New Name [" + passwords[pwd_highlight].name + "]: ");
+                        std::string new_login = get_input_str(5, 2, "New Login [" + passwords[pwd_highlight].login + "]: ");
+                        std::string new_pass = get_input_str(6, 2, "New Password (hidden): ", true);
+
+                        if (!new_name.empty()) passwords[pwd_highlight].name = new_name;
+                        if (!new_login.empty()) passwords[pwd_highlight].login = new_login;
+                        if (!new_pass.empty()) passwords[pwd_highlight].password = new_pass;
+
+                        manager.savePasswords(passwords, pass);
+                        update_status("Entry updated successfully.");
+                    }
+                    else if (ch == 'd' && !passwords.empty()) {
+                        mvprintw(LINES - 2, 2, " Delete '%s'? (y/n): ", passwords[pwd_highlight].name.c_str());
+                        int confirm = getch();
+                        if (confirm == 'y' || confirm == 'Y') {
+                            passwords.erase(passwords.begin() + pwd_highlight);
+                            
+                            if (pwd_highlight >= passwords.size() && pwd_highlight > 0) {
+                                pwd_highlight--;
+                            }
+                            
+                            manager.savePasswords(passwords, pass);
+                            update_status("Entry deleted.");
+                        } else {
+                            update_status("Deletion cancelled.");
                         }
                     }
                     else if (ch == 'c' && !passwords.empty()) {
@@ -349,6 +433,7 @@ int main() {
                     }
                 }
             }
+
 
             else if (highlight == 7) {
                 erase(); box(stdscr, 0, 0);
@@ -367,7 +452,34 @@ int main() {
                     update_status("New passwords do not match or empty!", true);
                 }
             }
-
+/*
+            else if (highlight == 8) { // Self-Destruct
+                erase(); box(stdscr, 0, 0);
+                attron(COLOR_PAIR(2) | A_BOLD);
+                mvprintw(2, 2, "!!! WARNING: TOTAL ANNIHILATION !!!");
+                attroff(COLOR_PAIR(2) | A_BOLD);
+                mvprintw(4, 2, "This will PERMANENTLY DELETE all your encrypted vaults,");
+                mvprintw(5, 2, "passwords, and the application itself.");
+                mvprintw(7, 2, "Type 'DESTROY' to confirm: ");
+    
+                echo();
+                char confirmBuf[256];
+                getnstr(confirmBuf, 255);
+                noecho();
+    
+                if (std::string(confirmBuf) == "DESTROY") {
+                    update_status("Wiping all data and self-destructing...");
+                    std::string exePath = fs::canonical("/proc/self/exe").string();
+        
+                    manager.selfDestructApp(exePath);
+        
+                    endwin();
+                    exit(0);
+                } else {
+                update_status("Self-destruct aborted.");
+                }
+            }
+*/
             curs_set(0);
             mvprintw(LINES - 2, 2, "Done. Press any key...");
             getch();
