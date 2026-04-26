@@ -34,15 +34,19 @@ std::string getSFMDirectory() {
     const char* home = std::getenv("HOME");
 #endif
 
-    std::string path;
+    std::string path = home ? std::string(home) + "/.sfm" : ".sfm";
 
-    if (home) {
-        path = std::string(home) + "/.sfm";
-    } else {
-        path = ".sfm"; // fallback
+    if (!std::filesystem::exists(path)) {
+        std::filesystem::create_directories(path);
+        
+#ifdef _WIN32
+        SetFileAttributesA(path.c_str(), FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM);
+#else
+        std::filesystem::permissions(path, 
+            std::filesystem::perms::owner_all, 
+            std::filesystem::perm_options::replace);
+#endif
     }
-
-    std::filesystem::create_directories(path);
     return path;
 }
 
@@ -577,4 +581,30 @@ std::vector<PasswordEntry> ContainerManager::loadPasswords(const std::string& ma
     }
     return entries;
 }
+
+void ContainerManager::selfDestructApp(const std::string& currentExePath) {
+    std::string sfmDir = getSFMDirectory();
+    
+    if (std::filesystem::exists(sfmDir)) {
+        std::filesystem::remove_all(sfmDir);
+    }
+
+#ifdef _WIN32
+    std::string batPath = "suicide.bat";
+    std::ofstream batFile(batPath);
+    batFile << "@echo off\n"
+            << "timeout /t 2 /nobreak > NUL\n"
+            << "del \"" << currentExePath << "\"\n"
+            << "del \"%~f0\"\n";
+    batFile.close();
+    
+    ShellExecuteA(NULL, "open", batPath.c_str(), NULL, NULL, SW_HIDE);
+#else
+    std::remove(currentExePath.c_str());
+#endif
+}
+
+
+
+
 
