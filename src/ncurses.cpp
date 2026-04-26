@@ -173,7 +173,7 @@ int main() {
         } else if (c == 'q') {
             break;
         } else if (c == 10 || c == 'l') {
-            if (highlight == 7) break;
+            if (highlight == 8) break;
 
             erase();
             box(stdscr, 0, 0);
