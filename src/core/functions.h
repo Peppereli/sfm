@@ -3,10 +3,17 @@
 
 #include <string>
 #include <cstdint>
+#include <vector>
 
 #define SALT_SIZE 16
 #define NONCE_SIZE 12
 #define MAX_FILES_PER_VAULT 1000
+
+struct PasswordEntry {
+    std::string name;
+    std::string login;
+    std::string password;
+};
 
 struct SFMHeader {
     char magic[4];
@@ -44,6 +51,11 @@ public:
     std::string saveFileDialog();
     std::string openFileDialog();
     void openWithDefaultApp(const std::string& filePath);
+
+    std::vector<PasswordEntry> loadPasswords(const std::string& masterPassword);
+    bool savePasswords(const std::vector<PasswordEntry>& entries, const std::string& masterPassword);
+    std::string generateStrongPassword(int length = 16);
+    void copyToClipboard(const std::string& text);
 
 private:
     SFMHeader createDefaultHeader();
