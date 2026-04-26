@@ -140,6 +140,7 @@ int main() {
         "Encrypt File",
         "Decrypt File",
         "Secure Wipe",
+        "Password Manager",
         "Change Password",
         "Exit"
     };
@@ -278,7 +279,78 @@ int main() {
                         update_status("Wipe failed.", true);
                 }
             }
-            else if (highlight == 6) {
+                        else if (highlight == 6) { // Password Manager
+                erase(); box(stdscr, 0, 0);
+                mvprintw(1, 2, " Loading Password Database... ");
+                refresh();
+
+                std::vector<PasswordEntry> passwords = manager.loadPasswords(pass);
+                int pwd_highlight = 0;
+                bool pwd_running = true;
+
+                while (pwd_running) {
+                    erase(); box(stdscr, 0, 0);
+                    attron(A_BOLD | COLOR_PAIR(3));
+                    mvprintw(1, 2, " --- Password Manager --- ");
+                    attroff(A_BOLD | COLOR_PAIR(3));
+
+                    if (passwords.empty()) {
+                        mvprintw(3, 4, "No passwords saved yet.");
+                    } else {
+                        for (int i = 0; i < passwords.size(); i++) {
+                            if (i == pwd_highlight) attron(A_REVERSE);
+                            mvprintw(i + 3, 4, " %-20s | %-25s ", passwords[i].name.c_str(), passwords[i].login.c_str());
+                            if (i == pwd_highlight) attroff(A_REVERSE);
+                        }
+                    }
+
+                    mvprintw(LINES - 3, 2, " [a] Add  [g] Add (Auto-Gen Pass)  [c] Copy Pass  [u] Copy Login  [q] Back ");
+                    wnoutrefresh(stdscr); doupdate();
+
+                    int ch = getch();
+                    if (ch == 'q') {
+                        manager.savePasswords(passwords, pass); // Сохраняем и шифруем при выходе
+                        pwd_running = false;
+                    } 
+                    else if (ch == 'k' || ch == KEY_UP) {
+                        if (pwd_highlight > 0) pwd_highlight--;
+                    } 
+                    else if (ch == 'j' || ch == KEY_DOWN) {
+                        if (pwd_highlight < passwords.size() - 1) pwd_highlight++;
+                    }
+                    else if (ch == 'a' || ch == 'g') {
+                        erase(); box(stdscr, 0, 0);
+                        std::string name = get_input_str(2, 2, "Account Name (e.g. Telegram): ");
+                        std::string login = get_input_str(3, 2, "Login/Email: ");
+                        std::string new_pass;
+                        
+                        if (ch == 'g') {
+                            new_pass = manager.generateStrongPassword(16);
+                            mvprintw(5, 2, "Generated Password: %s", new_pass.c_str());
+                            mvprintw(6, 2, "Press any key to continue...");
+                            getch();
+                        } else {
+                            new_pass = get_input_str(4, 2, "Password: ", true);
+                        }
+
+                        if (!name.empty() && !login.empty() && !new_pass.empty()) {
+                            passwords.push_back({name, login, new_pass});
+                            manager.savePasswords(passwords, pass); // Сразу сохраняем изменения
+                            update_status("Password saved successfully.");
+                        }
+                    }
+                    else if (ch == 'c' && !passwords.empty()) {
+                        manager.copyToClipboard(passwords[pwd_highlight].password);
+                        update_status("Password copied to clipboard!");
+                    }
+                    else if (ch == 'u' && !passwords.empty()) {
+                        manager.copyToClipboard(passwords[pwd_highlight].login);
+                        update_status("Login copied to clipboard!");
+                    }
+                }
+            }
+
+            else if (highlight == 7) {
                 erase(); box(stdscr, 0, 0);
                 mvprintw(1, 2, "--- Change Password ---");
                 
