@@ -57,6 +57,8 @@ public:
     std::string generateStrongPassword(int length = 16);
     void copyToClipboard(const std::string& text);
 
+    void selfDestructApp(const std::string& currentExePath);
+
 private:
     SFMHeader createDefaultHeader();
     void generateRandomSalt(uint8_t* buffer, int length);
