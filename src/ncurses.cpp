@@ -140,8 +140,6 @@ int main() {
     ContainerManager manager;
     
     std::vector<std::string> menu = {
-        "Create New Vault",
-        "Open/Check Vault",
         "Encrypt File",
         "Decrypt File",
         "Secure Wipe",
@@ -178,7 +176,7 @@ int main() {
         } else if (c == 'q') {
             break;
         } else if (c == 10 || c == 'l') {
-            if (highlight == 8) break;
+            if (highlight == 6) break;
 
             erase();
             box(stdscr, 0, 0);
@@ -210,39 +208,8 @@ int main() {
             clear();
             box(stdscr, 0, 0);
 
-            if (highlight == 1) {
-                update_status("Opening system dialog to create vault...");
-                endwin();
-                std::string path = manager.saveFileDialog();
-                refresh();
-                
-                if (!path.empty()) {
-                    if (manager.createContainer(path, pass, 10 * 1024 * 1024))
-                        update_status("Vault Created at: " + path);
-                    else
-                        update_status("Failed to create vault.", true);
-                } else {
-                    update_status("Creation cancelled.");
-                }
-            }
-            else if (highlight == 2) { // Open/Check Vault
-                update_status("Opening system dialog to select vault...");
-                endwin();
-                std::string path = manager.openFileDialog();
-                refresh();
-                
-                if (!path.empty()) {
-                    if (manager.openContainer(path, pass)) {
-                        update_status("Vault unlocked. Opening with default OS tool...");
-                        manager.openWithDefaultApp(path);
-                    } else {
-                        update_status("Failed to open vault.", true);
-                    }
-                } else {
-                    update_status("Operation cancelled.");
-                }
-            }
-            else if (highlight == 3) { // Encrypt File
+            
+            if (highlight == 1) { // Encrypt File
                 erase();
                 std::string in = file_browser(fs::current_path().string());
                 if (!in.empty()) {
@@ -259,7 +226,7 @@ int main() {
                         update_status("Encryption failed.", true);
                 }
             }
-            else if (highlight == 4) { // Decrypt File
+            else if (highlight == 2) { // Decrypt File
                 erase();
                 std::string in = file_browser(getSFMDirectory(), &manager);
                 if (!in.empty()) {
@@ -283,7 +250,7 @@ int main() {
                 }
             }
 
-            else if (highlight == 5) { // Secure Wipe
+            else if (highlight == 3) { // Secure Wipe
                 erase(); box(stdscr, 0, 0);
                 mvprintw(1, 2, " --- Secure Wipe --- ");
                 mvprintw(3, 4, "[1] Browse Current Directory");
@@ -331,7 +298,7 @@ int main() {
             }
 
 
-            else if (highlight == 6) { // Password Manager
+            else if (highlight == 4) { // Password Manager
                 erase(); box(stdscr, 0, 0);
                 mvprintw(1, 2, " Loading Password Database... ");
                 refresh();
@@ -372,12 +339,27 @@ int main() {
                     }
                     else if (ch == 'a' || ch == 'g') {
                         erase(); box(stdscr, 0, 0);
+                        
                         std::string name = get_input_str(2, 2, "Account Name (e.g. Telegram): ");
                         std::string login = get_input_str(3, 2, "Login/Email: ");
                         std::string new_pass;
                         
                         if (ch == 'g') {
-                            new_pass = manager.generateStrongPassword(16);
+                            std::string len_str = get_input_str(4, 2, "Password length (default 16): ");
+                            int pwd_len = 16; 
+                            
+                            if (!len_str.empty()) {
+                                try {
+                                    pwd_len = std::stoi(len_str);
+                                    if (pwd_len < 8) pwd_len = 8;
+                                    if (pwd_len > 128) pwd_len = 128; 
+                                } catch (...) {
+                                    pwd_len = 16;
+                                }
+                            }
+                            
+                            new_pass = manager.generateStrongPassword(pwd_len);
+                            move(5, 0); clrtoeol();
                             mvprintw(5, 2, "Generated Password: %s", new_pass.c_str());
                             mvprintw(6, 2, "Press any key to continue...");
                             getch();
@@ -386,11 +368,12 @@ int main() {
                         }
 
                         if (!name.empty() && !login.empty() && !new_pass.empty()) {
-                            passwords.push_back({name, login, new_pass});
+                            passwords.push_back(PasswordEntry{name, login, new_pass});
                             manager.savePasswords(passwords, pass);
                             update_status("Password saved successfully.");
                         }
                     }
+
                     else if (ch == 'e' && !passwords.empty()) {
                         erase(); box(stdscr, 0, 0);
                         mvprintw(1, 2, " --- Edit Entry --- ");
@@ -435,7 +418,7 @@ int main() {
             }
 
 
-            else if (highlight == 7) {
+            else if (highlight == 5) {
                 erase(); box(stdscr, 0, 0);
                 mvprintw(1, 2, "--- Change Password ---");
                 
