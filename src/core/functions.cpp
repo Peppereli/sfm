@@ -19,6 +19,8 @@
 
 #include <sstream>
 
+#include <utility>
+
 #ifdef _WIN32
 #include <windows.h>
 #include <commdlg.h>
@@ -514,17 +516,37 @@ bool ContainerManager::secureDeleteFile(const std::string& filePath) {
 }
 
 
+
 std::string ContainerManager::generateStrongPassword(int length) {
-    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+";
+    const std::string lowers = "abcdefghijklmnopqrstuvwxyz";
+    const std::string uppers = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const std::string digits = "0123456789";
+    const std::string specials = "!@#$%^&*()-_=+";
+    const std::string all = lowers + uppers + digits + specials;
+
     std::string password;
-    password.resize(length);
-    
+    password.reserve(length);
     AutoSeededRandomPool prng;
-    for (int i = 0; i < length; ++i) {
-        password[i] = charset[prng.GenerateByte() % (sizeof(charset) - 1)];
+
+    if (length >= 4) {
+        password += lowers[prng.GenerateByte() % lowers.length()];
+        password += uppers[prng.GenerateByte() % uppers.length()];
+        password += digits[prng.GenerateByte() % digits.length()];
+        password += specials[prng.GenerateByte() % specials.length()];
     }
+
+    while (password.length() < length) {
+        password += all[prng.GenerateByte() % all.length()];
+    }
+
+    for (int i = password.length() - 1; i > 0; --i) {
+        int j = prng.GenerateByte() % (i + 1);
+        std::swap(password[i], password[j]);
+    }
+
     return password;
 }
+
 
 void ContainerManager::copyToClipboard(const std::string& text) {
     std::string command;
