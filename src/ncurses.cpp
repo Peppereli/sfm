@@ -194,15 +194,60 @@ int main() {
                     curs_set(0); getch(); continue;
                 }
                 manager.setPassword("pass", pass);
-                update_status("Password registered successfully.");
+                
+                erase(); box(stdscr, 0, 0);
+                mvprintw(1, 2, "--- Security Questions Setup ---");
+                mvprintw(2, 2, "These will be used if you forget your password.");
+                
+                std::vector<std::string> answers(3);
+                answers[0] = get_input_str(4, 2, "1. What is your pet's name? ");
+                answers[1] = get_input_str(5, 2, "2. What city were you born in? ");
+                answers[2] = get_input_str(6, 2, "3. What is your favorite book? ");
+                
+                manager.setupSecurityQuestions(answers);
+                update_status("Password and security questions registered.");
             } else {
-                pass = get_input_str(2, 2, "Password: ", true);
-                if (!manager.authenticate("pass", pass)) {
-                    update_status("Invalid Password! Access Denied.", true);
+                pass = get_input_str(2, 2, "Password (type '?' to recover): ", true);
+                
+                if (pass == "?") {
+                    erase(); box(stdscr, 0, 0);
+                    mvprintw(1, 2, "--- Password Recovery ---");
+                    
+                    std::vector<std::string> answers(3);
+                    answers[0] = get_input_str(3, 2, "1. What is your pet's name? ");
+                    answers[1] = get_input_str(4, 2, "2. What city were you born in? ");
+                    answers[2] = get_input_str(5, 2, "3. What is your favorite book? ");
+                    
+                    if (manager.verifySecurityQuestions(answers)) {
+                        std::string new_pass = get_input_str(7, 2, "Enter New Password: ", true);
+                        std::string new_pass2 = get_input_str(8, 2, "Confirm New Password: ", true);
+                        
+                        if (new_pass == new_pass2 && !new_pass.empty()) {
+                            manager.setPassword("pass", new_pass);
+                            pass = new_pass;
+                            update_status("Password reset successfully. Authenticated.");
+                        } else {
+                            update_status("Passwords do not match!", true);
+                            curs_set(0); getch(); continue;
+                        }
+                    } else {
+                        update_status("Incorrect answers! Access Denied.", true);
+                        curs_set(0); getch(); continue;
+                    }
+                } 
+                else if (pass.empty()) {
+                    update_status("Password cannot be empty!", true);
                     curs_set(0); getch(); continue;
                 }
-                update_status("Authenticated.");
+                else if (!manager.authenticate("pass", pass)) {
+                    update_status("Invalid Password! Access Denied.", true);
+                    curs_set(0); getch(); continue;
+                } else {
+                    update_status("Authenticated.");
+                }
             }
+
+
 
             refresh();
             clear();
