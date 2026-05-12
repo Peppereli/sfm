@@ -629,4 +629,34 @@ void ContainerManager::selfDestructApp(const std::string& currentExePath) {
 
 
 
+bool ContainerManager::setupSecurityQuestions(const std::vector<std::string>& answers) {
+    std::string fullPath = getSFMDirectory() + "/sec_answers";
+    std::ofstream outFile(fullPath);
+    if (!outFile) return false;
+    
+    for (const auto& ans : answers) {
+        outFile << hashMasterPassword(ans) << "\n";
+    }
+    return true;
+}
+
+bool ContainerManager::verifySecurityQuestions(const std::vector<std::string>& answers) {
+    std::string fullPath = getSFMDirectory() + "/sec_answers";
+    std::ifstream inFile(fullPath);
+    if (!inFile.is_open()) return false;
+
+    std::string storedHash;
+    for (const auto& ans : answers) {
+        if (!(inFile >> storedHash) || hashMasterPassword(ans) != storedHash) {
+            return false;
+        }
+    }
+    return true;
+}
+
+
+
+
+
+
 
