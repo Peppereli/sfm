@@ -59,6 +59,10 @@ public:
 
     void selfDestructApp(const std::string& currentExePath);
 
+    bool setupSecurityQuestions(const std::vector<std::string>& answers);
+    bool verifySecurityQuestions(const std::vector<std::string>& answers);
+
+
 private:
     SFMHeader createDefaultHeader();
     void generateRandomSalt(uint8_t* buffer, int length);
