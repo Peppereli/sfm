@@ -22,36 +22,37 @@ MainWindow::MainWindow(QWidget *parent)
         "Change Password",
         "Exit"
     };
-
     for (const QString& text : buttons)
+{
+    QPushButton* btn = new QPushButton(text);
+
+    btn->setMinimumHeight(45);
+    btn->setFixedWidth(220);
+
+    layout->addWidget(btn, 0, Qt::AlignCenter);
+
+    connect(btn, &QPushButton::clicked, this, [=]()
     {
-        QPushButton* btn = new QPushButton(text);
+        if (text == "Encrypt File")
+            encryptFile();
 
-        btn->setMinimumHeight(45);
+        else if (text == "Decrypt File")
+            decryptFile();
 
-        layout->addWidget(btn);
+        else if (text == "Secure Wipe")
+            secureWipe();
 
-        connect(btn, &QPushButton::clicked, this, [=]()
-        {
-            if (text == "Encrypt File")
-                encryptFile();
+        else if (text == "Password Manager")
+            passwordManager();
 
-            else if (text == "Decrypt File")
-                decryptFile();
+        else if (text == "Change Password")
+            changePassword();
 
-            else if (text == "Secure Wipe")
-                secureWipe();
+        else if (text == "Exit")
+            close();
+    });
+}
 
-            else if (text == "Password Manager")
-                passwordManager();
-
-            else if (text == "Change Password")
-                changePassword();
-
-            else if (text == "Exit")
-                close();
-        });
-    }
 }
 
 bool MainWindow::authenticate(std::string& pass)
