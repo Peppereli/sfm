@@ -30,6 +30,8 @@ MainWindow::MainWindow(QWidget *parent)
     btn->setFixedWidth(220);
 
     layout->addWidget(btn, 0, Qt::AlignCenter);
+    layout->setSpacing(15);
+    layout->setContentsMargins(40, 40, 40, 40);
 
     connect(btn, &QPushButton::clicked, this, [=]()
     {
