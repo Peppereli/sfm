@@ -43,6 +43,12 @@ On linux you might need to compile it "-lncursesw" without "w" in the end.
 ```bash
 g++ src/ncurses.cpp src/core/functions.cpp -o main_tui.exe -static -static-libgcc -static-libstdc++ -DNCURSES_STATIC -I/ucrt64/include/ncurses -lcryptopp -lncursesw -lgdi32
 
+# For QT Interface:
+
+mkdir build && cd build && cmake .. && make
+
+# inside the src directory
+
 ```
 
 ### 2. Build the Prototype (Optional)

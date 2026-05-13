@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
 
     ContainerManager manager;
     
-    if (!manager.authenticateOrRegister("pass", password)) {
+    if (!manager.authenticate("pass", password)) {
         return 1; 
     }
 
