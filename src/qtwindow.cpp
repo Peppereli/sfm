@@ -14,6 +14,9 @@ MainWindow::MainWindow(QWidget *parent)
 
     QVBoxLayout* layout = new QVBoxLayout(central);
 
+    layout->setAlignment(Qt::AlignCenter);
+    layout->setSpacing(15);
+
     QStringList buttons = {
         "Encrypt File",
         "Decrypt File",
@@ -22,39 +25,36 @@ MainWindow::MainWindow(QWidget *parent)
         "Change Password",
         "Exit"
     };
+
     for (const QString& text : buttons)
-{
-    QPushButton* btn = new QPushButton(text);
-
-    btn->setMinimumHeight(45);
-    btn->setFixedWidth(220);
-
-    layout->addWidget(btn, 0, Qt::AlignCenter);
-    layout->setSpacing(15);
-    layout->setContentsMargins(40, 40, 40, 40);
-
-    connect(btn, &QPushButton::clicked, this, [=]()
     {
-        if (text == "Encrypt File")
-            encryptFile();
+        QPushButton* btn = new QPushButton(text);
 
-        else if (text == "Decrypt File")
-            decryptFile();
+        btn->setFixedSize(220, 45);
 
-        else if (text == "Secure Wipe")
-            secureWipe();
+        layout->addWidget(btn, 0, Qt::AlignCenter);
 
-        else if (text == "Password Manager")
-            passwordManager();
+        connect(btn, &QPushButton::clicked, this, [=]()
+        {
+            if (text == "Encrypt File")
+                encryptFile();
 
-        else if (text == "Change Password")
-            changePassword();
+            else if (text == "Decrypt File")
+                decryptFile();
 
-        else if (text == "Exit")
-            close();
-    });
-}
+            else if (text == "Secure Wipe")
+                secureWipe();
 
+            else if (text == "Password Manager")
+                passwordManager();
+
+            else if (text == "Change Password")
+                changePassword();
+
+            else if (text == "Exit")
+                close();
+        });
+    }
 }
 
 bool MainWindow::authenticate(std::string& pass)
@@ -127,7 +127,7 @@ bool MainWindow::authenticate(std::string& pass)
     QString pwd = QInputDialog::getText(
         this,
         "Authentication",
-        "Password:",
+        "Password (? for recovery):",
         QLineEdit::Password,
         "",
         &ok
@@ -135,6 +135,72 @@ bool MainWindow::authenticate(std::string& pass)
 
     if (!ok || pwd.isEmpty())
         return false;
+
+    if (pwd == "?")
+    {
+        std::vector<std::string> answers(3);
+
+        answers[0] = QInputDialog::getText(
+            this,
+            "Recovery",
+            "Pet name:"
+        ).toStdString();
+
+        answers[1] = QInputDialog::getText(
+            this,
+            "Recovery",
+            "Birth city:"
+        ).toStdString();
+
+        answers[2] = QInputDialog::getText(
+            this,
+            "Recovery",
+            "Favorite book:"
+        ).toStdString();
+
+        if (!manager.verifySecurityQuestions(answers))
+        {
+            QMessageBox::critical(
+                this,
+                "Denied",
+                "Wrong answers."
+            );
+
+            return false;
+        }
+
+        QString np1 = QInputDialog::getText(
+            this,
+            "Reset Password",
+            "New Password:",
+            QLineEdit::Password
+        );
+
+        QString np2 = QInputDialog::getText(
+            this,
+            "Reset Password",
+            "Confirm Password:",
+            QLineEdit::Password
+        );
+
+        if (np1 != np2 || np1.isEmpty())
+            return false;
+
+        manager.setPassword(
+            "pass",
+            np1.toStdString()
+        );
+
+        pass = np1.toStdString();
+
+        QMessageBox::information(
+            this,
+            "Recovered",
+            "Password reset successful."
+        );
+
+        return true;
+    }
 
     if (!manager.authenticate("pass", pwd.toStdString()))
     {
@@ -210,6 +276,19 @@ void MainWindow::decryptFile()
     std::string filename =
         fs::path(file.toStdString()).filename().string();
 
+    if (filename == "pass" ||
+        filename == "passwords.sfm" ||
+        filename == ".temp_pwd")
+    {
+        QMessageBox::critical(
+            this,
+            "Denied",
+            "Cannot decrypt system files."
+        );
+
+        return;
+    }
+
     std::string out =
         fs::current_path().string() + "/" + filename;
 
@@ -229,33 +308,107 @@ void MainWindow::decryptFile()
 
 void MainWindow::secureWipe()
 {
+    std::string pass;
+
+    // REQUIRE PASSWORD FIRST
+    if (!authenticate(pass))
+        return;
+
+    QMessageBox msg(this);
+
+    msg.setWindowTitle("Secure Wipe");
+
+    msg.setText("Choose location to wipe from:");
+
+    QPushButton* currentBtn =
+        msg.addButton(
+            "Current Directory",
+            QMessageBox::ActionRole
+        );
+
+    QPushButton* vaultBtn =
+        msg.addButton(
+            "Vault Directory",
+            QMessageBox::ActionRole
+        );
+
+    QPushButton* cancelBtn =
+        msg.addButton(QMessageBox::Cancel);
+
+    msg.exec();
+
+    QString startDir;
+
+    if (msg.clickedButton() == currentBtn)
+    {
+        startDir =
+            QString::fromStdString(
+                fs::current_path().string()
+            );
+    }
+    else if (msg.clickedButton() == vaultBtn)
+    {
+        startDir =
+            QString::fromStdString(
+                getSFMDirectory()
+            );
+    }
+    else
+    {
+        return;
+    }
+
     QString file = QFileDialog::getOpenFileName(
         this,
-        "Select File"
+        "Select File",
+        startDir
     );
 
     if (file.isEmpty())
         return;
 
+    std::string filename =
+        fs::path(file.toStdString()).filename().string();
+
+    // BLOCK SYSTEM FILES
+    if (
+        filename == "pass" ||
+        filename == "passwords.sfm" ||
+        filename == ".temp_pwd"
+    )
+    {
+        QMessageBox::critical(
+            this,
+            "Access Denied",
+            "Cannot wipe system files."
+        );
+
+        return;
+    }
+
     auto confirm = QMessageBox::warning(
         this,
         "WARNING",
-        "Permanently delete this file?",
+        "This will permanently destroy:\n\n" +
+        file +
+        "\n\nContinue?",
         QMessageBox::Yes | QMessageBox::No
     );
 
     if (confirm != QMessageBox::Yes)
         return;
 
-    bool ok = manager.secureDeleteFile(
-        file.toStdString()
-    );
+    bool ok =
+        manager.secureDeleteFile(
+            file.toStdString()
+        );
 
     QMessageBox::information(
         this,
-        "Wipe",
-        ok ? "File securely deleted."
-           : "Delete failed."
+        "Secure Wipe",
+        ok
+            ? "File securely wiped."
+            : "Wipe failed."
     );
 }
 
@@ -273,7 +426,7 @@ void MainWindow::passwordManager()
 
     dialog.setWindowTitle("Password Manager");
 
-    dialog.resize(700, 400);
+    dialog.resize(800, 450);
 
     QVBoxLayout* layout = new QVBoxLayout(&dialog);
 
@@ -311,12 +464,184 @@ void MainWindow::passwordManager()
 
     layout->addWidget(table);
 
+    QHBoxLayout* btnLayout = new QHBoxLayout();
+
+    QPushButton* addBtn =
+        new QPushButton("Add");
+
+    QPushButton* genBtn =
+        new QPushButton("Generate");
+
+    QPushButton* editBtn =
+        new QPushButton("Edit");
+
+    QPushButton* delBtn =
+        new QPushButton("Delete");
+
     QPushButton* copyPass =
         new QPushButton("Copy Password");
 
-    layout->addWidget(copyPass);
+    QPushButton* copyLogin =
+        new QPushButton("Copy Login");
 
-    QObject::connect(copyPass, &QPushButton::clicked,
+    btnLayout->addWidget(addBtn);
+    btnLayout->addWidget(genBtn);
+    btnLayout->addWidget(editBtn);
+    btnLayout->addWidget(delBtn);
+    btnLayout->addWidget(copyPass);
+    btnLayout->addWidget(copyLogin);
+
+    layout->addLayout(btnLayout);
+
+    connect(addBtn, &QPushButton::clicked, [&]()
+    {
+        QString name = QInputDialog::getText(
+            &dialog,
+            "Add Entry",
+            "Account:"
+        );
+
+        QString login = QInputDialog::getText(
+            &dialog,
+            "Add Entry",
+            "Login:"
+        );
+
+        QString pwd = QInputDialog::getText(
+            &dialog,
+            "Add Entry",
+            "Password:",
+            QLineEdit::Password
+        );
+
+        if (name.isEmpty() ||
+            login.isEmpty() ||
+            pwd.isEmpty())
+            return;
+
+        passwords.push_back({
+            name.toStdString(),
+            login.toStdString(),
+            pwd.toStdString()
+        });
+
+        manager.savePasswords(passwords, pass);
+
+        table->insertRow(table->rowCount());
+
+        int row = table->rowCount() - 1;
+
+        table->setItem(
+            row,
+            0,
+            new QTableWidgetItem(name)
+        );
+
+        table->setItem(
+            row,
+            1,
+            new QTableWidgetItem(login)
+        );
+    });
+
+    connect(genBtn, &QPushButton::clicked, [&]()
+    {
+        bool ok;
+
+        int len = QInputDialog::getInt(
+            &dialog,
+            "Generate Password",
+            "Length:",
+            16,
+            8,
+            128,
+            1,
+            &ok
+        );
+
+        if (!ok)
+            return;
+
+        std::string generated =
+            manager.generateStrongPassword(len);
+
+        QApplication::clipboard()->setText(
+            QString::fromStdString(generated)
+        );
+
+        QMessageBox::information(
+            &dialog,
+            "Generated",
+            "Password copied to clipboard."
+        );
+    });
+
+    connect(editBtn, &QPushButton::clicked, [&]()
+    {
+        int row = table->currentRow();
+
+        if (row < 0)
+            return;
+
+        QString name = QInputDialog::getText(
+            &dialog,
+            "Edit",
+            "Account:",
+            QLineEdit::Normal,
+            QString::fromStdString(
+                passwords[row].name
+            )
+        );
+
+        QString login = QInputDialog::getText(
+            &dialog,
+            "Edit",
+            "Login:",
+            QLineEdit::Normal,
+            QString::fromStdString(
+                passwords[row].login
+            )
+        );
+
+        QString pwd = QInputDialog::getText(
+            &dialog,
+            "Edit",
+            "Password:",
+            QLineEdit::Password,
+            QString::fromStdString(
+                passwords[row].password
+            )
+        );
+
+        passwords[row] = {
+            name.toStdString(),
+            login.toStdString(),
+            pwd.toStdString()
+        };
+
+        manager.savePasswords(passwords, pass);
+
+        table->item(row, 0)->setText(name);
+        table->item(row, 1)->setText(login);
+    });
+
+    connect(delBtn, &QPushButton::clicked, [&]()
+    {
+        int row = table->currentRow();
+
+        if (row < 0)
+            return;
+
+        passwords.erase(
+            passwords.begin() + row
+        );
+
+        manager.savePasswords(passwords, pass);
+
+        table->removeRow(row);
+    });
+
+    connect(copyPass, &QPushButton::clicked,
     [&]()
     {
         int row = table->currentRow();
@@ -327,6 +652,21 @@ void MainWindow::passwordManager()
         QGuiApplication::clipboard()->setText(
             QString::fromStdString(
                 passwords[row].password
+            )
+        );
+    });
+
+    connect(copyLogin, &QPushButton::clicked,
+    [&]()
+    {
+        int row = table->currentRow();
+
+        if (row < 0)
+            return;
+
+        QGuiApplication::clipboard()->setText(
+            QString::fromStdString(
+                passwords[row].login
             )
         );
     });

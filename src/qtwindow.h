@@ -3,16 +3,18 @@
 #include <QMainWindow>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QFileDialog>
+#include <QDialog>
 #include <QTableWidget>
 #include <QHeaderView>
 #include <QClipboard>
 #include <QGuiApplication>
+#include <QApplication>
 
 #include <filesystem>
-#include <vector>
 
 #include "core/functions.h"
 
@@ -21,7 +23,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = nullptr);
+    MainWindow(QWidget *parent = nullptr);
 
 private:
     ContainerManager manager;
